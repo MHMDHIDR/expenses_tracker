@@ -19,6 +19,7 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { formatCurrency } from "@/lib/format-currency";
 
 const COLORS = ["#10b981", "#f59e0b", "#ef4444"];
 
@@ -40,13 +41,13 @@ export default function Home() {
   const getAlertIcon = (type: string) => {
     switch (type) {
       case "danger":
-        return <AlertTriangle className="w-5 h-5 text-red-400" />;
+        return <AlertTriangle className="size-5 text-red-400" />;
       case "warning":
-        return <AlertTriangle className="w-5 h-5 text-amber-400" />;
+        return <AlertTriangle className="size-5 text-amber-400" />;
       case "success":
-        return <CheckCircle className="w-5 h-5 text-emerald-400" />;
+        return <CheckCircle className="size-5 text-emerald-400" />;
       default:
-        return <Info className="w-5 h-5 text-blue-400" />;
+        return <Info className="size-5 text-blue-400" />;
     }
   };
 
@@ -86,10 +87,12 @@ export default function Home() {
           className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-4 border border-slate-700/50"
         >
           <div className="flex items-center gap-2 text-slate-400 mb-2">
-            <Wallet className="w-4 h-4" />
+            <Wallet className="size-4" />
             <span className="text-xs font-medium">Holdings</span>
           </div>
-          <p className="text-2xl font-bold text-white">${holding.toFixed(2)}</p>
+          <p className="text-2xl font-bold text-white">
+            {formatCurrency({ price: holding })}
+          </p>
         </motion.div>
 
         <motion.div
@@ -99,11 +102,11 @@ export default function Home() {
           className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-4 border border-slate-700/50"
         >
           <div className="flex items-center gap-2 text-slate-400 mb-2">
-            <TrendingDown className="w-4 h-4" />
+            <TrendingDown className="size-4" />
             <span className="text-xs font-medium">Spent</span>
           </div>
           <p className="text-2xl font-bold text-rose-400">
-            ${totalSpent.toFixed(2)}
+            {formatCurrency({ price: totalSpent })}
           </p>
         </motion.div>
 
@@ -114,13 +117,13 @@ export default function Home() {
           className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-4 border border-slate-700/50"
         >
           <div className="flex items-center gap-2 text-slate-400 mb-2">
-            <TrendingUp className="w-4 h-4" />
+            <TrendingUp className="size-4" />
             <span className="text-xs font-medium">Remaining</span>
           </div>
           <p
             className={`text-2xl font-bold ${remaining >= 0 ? "text-emerald-400" : "text-red-400"}`}
           >
-            ${remaining.toFixed(2)}
+            {formatCurrency({ price: remaining })}
           </p>
         </motion.div>
 
@@ -131,7 +134,7 @@ export default function Home() {
           className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-4 border border-slate-700/50"
         >
           <div className="flex items-center gap-2 text-slate-400 mb-2">
-            <Receipt className="w-4 h-4" />
+            <Receipt className="size-4" />
             <span className="text-xs font-medium">Receipts</span>
           </div>
           <p className="text-2xl font-bold text-cyan-400">{receipts.length}</p>
@@ -167,7 +170,7 @@ export default function Home() {
               </Pie>
               <Tooltip
                 formatter={(value: number | undefined) =>
-                  value != null ? `$${value.toFixed(2)}` : "$0.00"
+                  formatCurrency({ price: value ?? 0 })
                 }
                 contentStyle={{
                   backgroundColor: "#1e293b",
@@ -229,7 +232,7 @@ export default function Home() {
             whileTap={{ scale: 0.98 }}
             className="bg-linear-to-br from-emerald-500 to-cyan-500 rounded-2xl p-5 cursor-pointer"
           >
-            <Receipt className="w-8 h-8 text-white mb-3" />
+            <Receipt className="size-8 text-white mb-3" />
             <h3 className="font-semibold text-white">Scan Receipt</h3>
             <p className="text-white/70 text-sm mt-1">Add new expenses</p>
           </motion.div>
@@ -241,7 +244,7 @@ export default function Home() {
             whileTap={{ scale: 0.98 }}
             className="bg-linear-to-br from-violet-500 to-purple-500 rounded-2xl p-5 cursor-pointer"
           >
-            <ShoppingBag className="w-8 h-8 text-white mb-3" />
+            <ShoppingBag className="size-8 text-white mb-3" />
             <h3 className="font-semibold text-white">View History</h3>
             <p className="text-white/70 text-sm mt-1">
               {items.length} items tracked

@@ -31,7 +31,7 @@ export default function NotFound() {
             whileTap={{ scale: 0.95 }}
             className="bg-linear-to-r from-emerald-500 to-cyan-500 text-white px-8 py-3 rounded-xl font-semibold flex items-center gap-2 mx-auto"
           >
-            <Home className="w-5 h-5" />
+            <Home className="size-5" />
             Go Home
           </motion.button>
         </Link>

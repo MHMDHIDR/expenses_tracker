@@ -33,7 +33,7 @@ export default function BottomNav() {
                   >
                     <div className="absolute inset-0 bg-linear-to-r from-emerald-500 to-cyan-500 rounded-full blur-lg opacity-50" />
                     <div className="relative bg-linear-to-r from-emerald-500 to-cyan-500 p-4 rounded-full shadow-lg">
-                      <Icon className="w-6 h-6 text-white" />
+                      <Icon className="size-6 text-white" />
                     </div>
                   </motion.div>
                 </NavLink>
@@ -55,7 +55,7 @@ export default function BottomNav() {
                     }`}
                   >
                     <Icon
-                      className={`w-5 h-5 transition-colors ${
+                      className={`size-5 transition-colors ${
                         isActive ? "text-emerald-400" : "text-slate-400"
                       }`}
                     />

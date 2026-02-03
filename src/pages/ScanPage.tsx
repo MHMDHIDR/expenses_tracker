@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { formatCurrency } from "@/lib/format-currency";
 
 export default function ScanPage() {
   const navigate = useNavigate();
@@ -125,7 +126,7 @@ export default function ScanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-950 via-slate-900 to-slate-950 text-white pb-24">
+    <div className="min-h-screen flex flex-col justify-between bg-linear-to-br from-slate-950 via-slate-900 to-slate-950 text-white pb-24">
       {/* Header */}
       <motion.header
         initial={{ opacity: 0, y: -20 }}
@@ -138,7 +139,7 @@ export default function ScanPage() {
         <p className="text-slate-400 mt-1">Capture or upload your receipt</p>
       </motion.header>
 
-      <div className="px-6">
+      <div className="px-4">
         <AnimatePresence mode="wait">
           {/* Camera View */}
           {showCamera && (
@@ -162,13 +163,13 @@ export default function ScanPage() {
                   onClick={() => setShowCamera(false)}
                   className="p-4 bg-slate-800/80 backdrop-blur rounded-full"
                 >
-                  <X className="w-6 h-6" />
+                  <X className="size-6" />
                 </button>
                 <button
                   onClick={capturePhoto}
                   className="p-4 bg-emerald-500 rounded-full"
                 >
-                  <Camera className="w-6 h-6" />
+                  <Camera className="size-6" />
                 </button>
               </div>
             </motion.div>
@@ -193,14 +194,14 @@ export default function ScanPage() {
                   onClick={reset}
                   className="absolute top-3 right-3 p-2 bg-slate-800/80 backdrop-blur rounded-full"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="size-5" />
                 </button>
               </div>
 
               {error && (
                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-4">
                   <div className="flex items-center gap-2 text-red-400">
-                    <AlertCircle className="w-5 h-5" />
+                    <AlertCircle className="size-5" />
                     <span>{error}</span>
                   </div>
                 </div>
@@ -213,12 +214,12 @@ export default function ScanPage() {
               >
                 {isProcessing ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <Loader2 className="size-5 animate-spin" />
                     Processing...
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-5 h-5" />
+                    <Sparkles className="size-5" />
                     Analyze Receipt
                   </>
                 )}
@@ -261,7 +262,7 @@ export default function ScanPage() {
                         </p>
                       </div>
                       <p className="font-semibold text-emerald-400">
-                        ${item.price.toFixed(2)}
+                        {formatCurrency({ price: item.price })}
                       </p>
                     </motion.div>
                   ))}
@@ -270,14 +271,14 @@ export default function ScanPage() {
                 <div className="mt-4 pt-4 border-t border-slate-700 flex justify-between items-center">
                   <span className="text-lg font-semibold">Total</span>
                   <span className="text-2xl font-bold text-emerald-400">
-                    $
-                    {(
-                      parsedData.total ??
-                      parsedData.items.reduce(
-                        (sum, item) => sum + item.price * item.quantity,
-                        0,
-                      )
-                    ).toFixed(2)}
+                    {formatCurrency({
+                      price:
+                        parsedData.total ??
+                        parsedData.items.reduce(
+                          (sum, item) => sum + item.price * item.quantity,
+                          0,
+                        ),
+                    })}
                   </span>
                 </div>
               </div>
@@ -287,14 +288,14 @@ export default function ScanPage() {
                   onClick={reset}
                   className="flex-1 bg-slate-700 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2"
                 >
-                  <RotateCcw className="w-5 h-5" />
+                  <RotateCcw className="size-5" />
                   Retry
                 </button>
                 <button
                   onClick={saveReceipt}
                   className="flex-1 bg-linear-to-r from-emerald-500 to-cyan-500 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2"
                 >
-                  <Check className="w-5 h-5" />
+                  <Check className="size-5" />
                   Save
                 </button>
               </div>
@@ -308,7 +309,7 @@ export default function ScanPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="space-y-4"
+              className="flex gap-3 mb-4"
             >
               <motion.button
                 whileHover={{ scale: 1.02 }}
@@ -316,9 +317,8 @@ export default function ScanPage() {
                 onClick={() => setShowCamera(true)}
                 className="w-full bg-linear-to-br from-emerald-500 to-cyan-500 rounded-2xl p-8 text-center"
               >
-                <Camera className="w-12 h-12 mx-auto mb-3" />
+                <Camera className="size-12 mx-auto mb-3" />
                 <h3 className="text-xl font-semibold">Take Photo</h3>
-                <p className="text-white/70 mt-1">Use your camera to capture</p>
               </motion.button>
 
               <motion.button
@@ -327,9 +327,8 @@ export default function ScanPage() {
                 onClick={() => fileInputRef.current?.click()}
                 className="w-full bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 text-center"
               >
-                <Upload className="w-12 h-12 mx-auto mb-3 text-slate-400" />
+                <Upload className="size-12 mx-auto mb-3 text-slate-400" />
                 <h3 className="text-xl font-semibold">Upload Image</h3>
-                <p className="text-slate-400 mt-1">Choose from your gallery</p>
               </motion.button>
 
               <input

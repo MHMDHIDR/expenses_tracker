@@ -84,7 +84,7 @@ export default function SettingsPage() {
         >
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-emerald-500/20 rounded-xl">
-              <PiggyBank className="w-5 h-5 text-emerald-400" />
+              <PiggyBank className="size-5 text-emerald-400" />
             </div>
             <h2 className="text-lg font-semibold">Weekly Budget</h2>
           </div>
@@ -93,7 +93,7 @@ export default function SettingsPage() {
           </p>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-              $
+              £
             </span>
             <input
               type="number"
@@ -114,7 +114,7 @@ export default function SettingsPage() {
         >
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-cyan-500/20 rounded-xl">
-              <Wallet className="w-5 h-5 text-cyan-400" />
+              <Wallet className="size-5 text-cyan-400" />
             </div>
             <h2 className="text-lg font-semibold">Current Holdings</h2>
           </div>
@@ -123,7 +123,7 @@ export default function SettingsPage() {
           </p>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-              $
+              £
             </span>
             <input
               type="number"
@@ -144,7 +144,7 @@ export default function SettingsPage() {
         >
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-violet-500/20 rounded-xl">
-              <Key className="w-5 h-5 text-violet-400" />
+              <Key className="size-5 text-violet-400" />
             </div>
             <h2 className="text-lg font-semibold">OpenAI API Key</h2>
           </div>
@@ -164,9 +164,9 @@ export default function SettingsPage() {
               className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
             >
               {showApiKey ? (
-                <EyeOff className="w-5 h-5" />
+                <EyeOff className="size-5" />
               ) : (
-                <Eye className="w-5 h-5" />
+                <Eye className="size-5" />
               )}
             </button>
           </div>
@@ -184,9 +184,9 @@ export default function SettingsPage() {
           className="w-full bg-linear-to-r from-emerald-500 to-cyan-500 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {isSaving ? (
-            <Settings className="w-5 h-5 animate-spin" />
+            <Settings className="size-5 animate-spin" />
           ) : (
-            <Save className="w-5 h-5" />
+            <Save className="size-5" />
           )}
           {isSaving ? "Saving..." : "Save Settings"}
         </motion.button>
@@ -200,7 +200,7 @@ export default function SettingsPage() {
         >
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-red-500/20 rounded-xl">
-              <Trash2 className="w-5 h-5 text-red-400" />
+              <Trash2 className="size-5 text-red-400" />
             </div>
             <h2 className="text-lg font-semibold">Data Management</h2>
           </div>
@@ -212,7 +212,7 @@ export default function SettingsPage() {
           {showClearConfirm ? (
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
               <div className="flex items-center gap-2 text-red-400 mb-3">
-                <AlertTriangle className="w-5 h-5" />
+                <AlertTriangle className="size-5" />
                 <span className="font-semibold">Are you sure?</span>
               </div>
               <p className="text-slate-300 text-sm mb-4">
@@ -230,7 +230,7 @@ export default function SettingsPage() {
                   onClick={handleClearData}
                   className="flex-1 bg-red-500 py-2 rounded-lg font-medium flex items-center justify-center gap-2"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="size-4" />
                   Delete All
                 </button>
               </div>

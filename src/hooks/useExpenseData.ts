@@ -7,6 +7,7 @@ import type {
   BudgetAlert,
 } from "@/types/expenses";
 import { useMemo, useCallback } from "react";
+import { formatCurrency } from "@/lib/format-currency";
 
 // Default settings
 const DEFAULT_SETTINGS: UserSettings = {
@@ -72,7 +73,7 @@ export function useExpenseData() {
       alertList.push({
         type: "danger",
         title: "Low Funds",
-        message: `Only $${remaining.toFixed(2)} remaining. Time to watch your spending!`,
+        message: `Only ${formatCurrency({ price: remaining })} remaining. Time to watch your spending!`,
       });
     }
 

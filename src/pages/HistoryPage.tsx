@@ -8,6 +8,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
+import { formatCurrency } from "@/lib/format-currency";
 
 export default function HistoryPage() {
   const { itemsByDate, items, deleteItem } = useExpenseData();
@@ -69,18 +70,18 @@ export default function HistoryPage() {
                 >
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-violet-500/20 rounded-xl">
-                      <Calendar className="w-5 h-5 text-violet-400" />
+                      <Calendar className="size-5 text-violet-400" />
                     </div>
                     <div className="text-left">
                       <p className="font-semibold text-white">{dateKey}</p>
                       <p className="text-sm text-slate-400">
-                        {itemsByDate[dateKey].length} items • $
-                        {itemsByDate[dateKey]
-                          .reduce(
+                        {itemsByDate[dateKey].length} items •{" "}
+                        {formatCurrency({
+                          price: itemsByDate[dateKey].reduce(
                             (sum, item) => sum + item.price * item.quantity,
                             0,
-                          )
-                          .toFixed(2)}
+                          ),
+                        })}
                       </p>
                     </div>
                   </div>
@@ -88,7 +89,7 @@ export default function HistoryPage() {
                     animate={{ rotate: expandedDate === dateKey ? 90 : 0 }}
                     transition={{ duration: 0.2 }}
                   >
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
+                    <ChevronRight className="size-5 text-slate-400" />
                   </motion.div>
                 </button>
 
@@ -113,27 +114,29 @@ export default function HistoryPage() {
                           >
                             <div className="flex items-center gap-3">
                               <div className="p-2 bg-slate-700/50 rounded-lg">
-                                <ShoppingBag className="w-4 h-4 text-slate-400" />
+                                <ShoppingBag className="size-4 text-slate-400" />
                               </div>
                               <div>
                                 <p className="font-medium text-white">
                                   {item.name}
                                 </p>
                                 <p className="text-sm text-slate-400">
-                                  Qty: {item.quantity} × $
-                                  {item.price.toFixed(2)}
+                                  Qty: {item.quantity} ×{" "}
+                                  {formatCurrency({ price: item.price })}
                                 </p>
                               </div>
                             </div>
                             <div className="flex items-center gap-3">
                               <span className="font-semibold text-emerald-400">
-                                ${(item.price * item.quantity).toFixed(2)}
+                                {formatCurrency({
+                                  price: item.price * item.quantity,
+                                })}
                               </span>
                               <button
                                 onClick={(e) => handleDelete(item.id!, e)}
                                 className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
                               >
-                                <Trash2 className="w-4 h-4 text-red-400" />
+                                <Trash2 className="size-4 text-red-400" />
                               </button>
                             </div>
                           </motion.div>

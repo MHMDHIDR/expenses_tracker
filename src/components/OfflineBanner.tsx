@@ -35,7 +35,7 @@ export default function OfflineBanner() {
         >
           <div className="bg-amber-600 text-white px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <WifiOff className="w-5 h-5 shrink-0" />
+              <WifiOff className="size-5 shrink-0" />
               <div>
                 <p className="font-medium text-sm">You're offline</p>
                 <p className="text-xs opacity-90">
@@ -47,7 +47,7 @@ export default function OfflineBanner() {
               onClick={() => setShowBanner(false)}
               className="p-1 hover:bg-black/10 rounded-lg transition-colors"
             >
-              <X className="w-4 h-4" />
+              <X className="size-4" />
             </button>
           </div>
         </motion.div>
@@ -62,7 +62,7 @@ export default function OfflineBanner() {
           className="fixed top-0 left-0 right-0 z-50"
         >
           <div className="bg-emerald-600 text-white px-4 py-3 flex items-center justify-center gap-2">
-            <Wifi className="w-5 h-5" />
+            <Wifi className="size-5" />
             <p className="font-medium text-sm">You're back online!</p>
           </div>
         </motion.div>
