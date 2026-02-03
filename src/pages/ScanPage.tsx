@@ -100,6 +100,35 @@ export default function ScanPage() {
     clearError();
   };
 
+  const updateItem = (
+    index: number,
+    field: "name" | "quantity" | "price",
+    value: string,
+  ) => {
+    if (!parsedData) return;
+
+    const updatedItems = [...parsedData.items];
+    if (field === "name") {
+      updatedItems[index] = { ...updatedItems[index], name: value };
+    } else if (field === "quantity") {
+      const numValue = parseInt(value) || 0;
+      updatedItems[index] = { ...updatedItems[index], quantity: numValue };
+    } else if (field === "price") {
+      const numValue = parseFloat(value) || 0;
+      updatedItems[index] = { ...updatedItems[index], price: numValue };
+    }
+
+    setParsedData({
+      ...parsedData,
+      items: updatedItems,
+      // Recalculate total when items change
+      total: updatedItems.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0,
+      ),
+    });
+  };
+
   if (!hasApiKey) {
     return (
       <div className="min-h-screen bg-linear-to-br from-slate-950 via-slate-900 to-slate-950 text-white pb-24 flex flex-col items-center justify-center px-6">
@@ -246,24 +275,71 @@ export default function ScanPage() {
                 )}
 
                 <div className="space-y-3">
-                  <span className="text-slate-400 text-sm">Items Found</span>
+                  <span className="text-slate-400 text-sm">
+                    Items Found (tap to edit)
+                  </span>
                   {parsedData.items.map((item, index) => (
                     <motion.div
                       key={index}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.05 }}
-                      className="flex items-center justify-between bg-slate-700/30 p-3 rounded-xl"
+                      className="bg-slate-700/30 p-3 rounded-xl space-y-2"
                     >
-                      <div>
-                        <p className="font-medium">{item.name}</p>
-                        <p className="text-sm text-slate-400">
-                          Qty: {item.quantity}
-                        </p>
+                      {/* Item Name */}
+                      <input
+                        type="text"
+                        value={item.name}
+                        onChange={(e) =>
+                          updateItem(index, "name", e.target.value)
+                        }
+                        className="w-full bg-slate-600/50 border border-slate-600 rounded-lg px-3 py-2 text-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                        placeholder="Item name"
+                      />
+                      <div className="flex gap-3">
+                        {/* Quantity */}
+                        <div className="flex-1">
+                          <label className="text-xs text-slate-400 mb-1 block">
+                            Qty
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) =>
+                              updateItem(index, "quantity", e.target.value)
+                            }
+                            className="w-full bg-slate-600/50 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                          />
+                        </div>
+                        {/* Price */}
+                        <div className="flex-1">
+                          <label className="text-xs text-slate-400 mb-1 block">
+                            Price (£)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={item.price}
+                            onChange={(e) =>
+                              updateItem(index, "price", e.target.value)
+                            }
+                            className="w-full bg-slate-600/50 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                          />
+                        </div>
+                        {/* Subtotal (readonly) */}
+                        <div className="flex-1">
+                          <label className="text-xs text-slate-400 mb-1 block">
+                            Subtotal
+                          </label>
+                          <div className="bg-slate-700/50 border border-slate-700 rounded-lg px-3 py-2 text-emerald-400 font-semibold">
+                            {formatCurrency({
+                              price: item.price * item.quantity,
+                            })}
+                          </div>
+                        </div>
                       </div>
-                      <p className="font-semibold text-emerald-400">
-                        {formatCurrency({ price: item.price })}
-                      </p>
                     </motion.div>
                   ))}
                 </div>
