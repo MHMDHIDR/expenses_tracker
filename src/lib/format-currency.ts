@@ -12,10 +12,10 @@ type FormatCurrencyProps = {
  */
 export function formatCurrency({
   price,
-  minimumFractionDigits = 2,
+  minimumFractionDigits = 0,
   locale = "en-GB",
   currency = "GBP",
-  toPence = true,
+  toPence = false,
 }: FormatCurrencyProps) {
   return new Intl.NumberFormat(locale, {
     style: "currency",
