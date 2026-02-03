@@ -1,0 +1,348 @@
+import { useState, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import Webcam from "react-webcam";
+import { useExpenseData } from "@/hooks/useExpenseData";
+import { useReceiptScanner } from "@/hooks/useReceiptScanner";
+import {
+  Camera,
+  Upload,
+  X,
+  Check,
+  Loader2,
+  AlertCircle,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+
+export default function ScanPage() {
+  const navigate = useNavigate();
+  const webcamRef = useRef<Webcam>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { settings, addReceiptWithItems } = useExpenseData();
+  const { scanReceipt, isProcessing, error, clearError } = useReceiptScanner();
+
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [parsedData, setParsedData] = useState<{
+    merchant?: string;
+    items: { name: string; quantity: number; price: number; date: Date }[];
+    total?: number;
+  } | null>(null);
+
+  const hasApiKey = Boolean(settings?.openaiKey);
+
+  const capturePhoto = useCallback(() => {
+    const imageSrc = webcamRef.current?.getScreenshot();
+    if (imageSrc) {
+      setCapturedImage(imageSrc);
+      setShowCamera(false);
+    }
+  }, []);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCapturedImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const processImage = async () => {
+    if (!capturedImage || !settings?.openaiKey) return;
+
+    clearError();
+    const result = await scanReceipt(capturedImage, settings.openaiKey);
+
+    if (result) {
+      setParsedData(result);
+    }
+  };
+
+  const saveReceipt = async () => {
+    if (!parsedData) return;
+
+    const total =
+      parsedData.total ??
+      parsedData.items.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0,
+      );
+
+    try {
+      await addReceiptWithItems(
+        {
+          date: new Date(),
+          totalAmount: total,
+          merchant: parsedData.merchant,
+          imageUrl: capturedImage ?? undefined,
+          processed: true,
+        },
+        parsedData.items,
+      );
+
+      toast.success("Receipt saved successfully!");
+      navigate("/");
+    } catch (err) {
+      toast.error("Failed to save receipt");
+    }
+  };
+
+  const reset = () => {
+    setCapturedImage(null);
+    setParsedData(null);
+    clearError();
+  };
+
+  if (!hasApiKey) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-slate-950 via-slate-900 to-slate-950 text-white pb-24 flex flex-col items-center justify-center px-6">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <AlertCircle className="w-16 h-16 text-amber-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-2">API Key Required</h2>
+          <p className="text-slate-400 mb-6">
+            Please add your OpenAI API key in Settings to use the receipt
+            scanner.
+          </p>
+          <button
+            onClick={() => navigate("/settings")}
+            className="bg-linear-to-r from-emerald-500 to-cyan-500 text-white px-6 py-3 rounded-xl font-semibold"
+          >
+            Go to Settings
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-linear-to-br from-slate-950 via-slate-900 to-slate-950 text-white pb-24">
+      {/* Header */}
+      <motion.header
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="px-6 pt-12 pb-6"
+      >
+        <h1 className="text-3xl font-bold bg-linear-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+          Scan Receipt
+        </h1>
+        <p className="text-slate-400 mt-1">Capture or upload your receipt</p>
+      </motion.header>
+
+      <div className="px-6">
+        <AnimatePresence mode="wait">
+          {/* Camera View */}
+          {showCamera && (
+            <motion.div
+              key="camera"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="relative rounded-2xl overflow-hidden mb-6"
+            >
+              <Webcam
+                ref={webcamRef}
+                screenshotFormat="image/jpeg"
+                className="w-full rounded-2xl"
+                videoConstraints={{
+                  facingMode: "environment",
+                }}
+              />
+              <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                <button
+                  onClick={() => setShowCamera(false)}
+                  className="p-4 bg-slate-800/80 backdrop-blur rounded-full"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+                <button
+                  onClick={capturePhoto}
+                  className="p-4 bg-emerald-500 rounded-full"
+                >
+                  <Camera className="w-6 h-6" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Captured Image Preview */}
+          {capturedImage && !parsedData && (
+            <motion.div
+              key="preview"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="mb-6"
+            >
+              <div className="relative rounded-2xl overflow-hidden mb-4">
+                <img
+                  src={capturedImage}
+                  alt="Captured receipt"
+                  className="w-full rounded-2xl"
+                />
+                <button
+                  onClick={reset}
+                  className="absolute top-3 right-3 p-2 bg-slate-800/80 backdrop-blur rounded-full"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-4">
+                  <div className="flex items-center gap-2 text-red-400">
+                    <AlertCircle className="w-5 h-5" />
+                    <span>{error}</span>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={processImage}
+                disabled={isProcessing}
+                className="w-full bg-linear-to-r from-emerald-500 to-cyan-500 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5" />
+                    Analyze Receipt
+                  </>
+                )}
+              </button>
+            </motion.div>
+          )}
+
+          {/* Parsed Results */}
+          {parsedData && (
+            <motion.div
+              key="results"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50 mb-6">
+                {parsedData.merchant && (
+                  <div className="mb-4 pb-4 border-b border-slate-700">
+                    <span className="text-slate-400 text-sm">Merchant</span>
+                    <p className="text-lg font-semibold">
+                      {parsedData.merchant}
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <span className="text-slate-400 text-sm">Items Found</span>
+                  {parsedData.items.map((item, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="flex items-center justify-between bg-slate-700/30 p-3 rounded-xl"
+                    >
+                      <div>
+                        <p className="font-medium">{item.name}</p>
+                        <p className="text-sm text-slate-400">
+                          Qty: {item.quantity}
+                        </p>
+                      </div>
+                      <p className="font-semibold text-emerald-400">
+                        ${item.price.toFixed(2)}
+                      </p>
+                    </motion.div>
+                  ))}
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-slate-700 flex justify-between items-center">
+                  <span className="text-lg font-semibold">Total</span>
+                  <span className="text-2xl font-bold text-emerald-400">
+                    $
+                    {(
+                      parsedData.total ??
+                      parsedData.items.reduce(
+                        (sum, item) => sum + item.price * item.quantity,
+                        0,
+                      )
+                    ).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={reset}
+                  className="flex-1 bg-slate-700 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                  Retry
+                </button>
+                <button
+                  onClick={saveReceipt}
+                  className="flex-1 bg-linear-to-r from-emerald-500 to-cyan-500 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2"
+                >
+                  <Check className="w-5 h-5" />
+                  Save
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Initial State - Capture Options */}
+          {!showCamera && !capturedImage && (
+            <motion.div
+              key="options"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-4"
+            >
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setShowCamera(true)}
+                className="w-full bg-linear-to-br from-emerald-500 to-cyan-500 rounded-2xl p-8 text-center"
+              >
+                <Camera className="w-12 h-12 mx-auto mb-3" />
+                <h3 className="text-xl font-semibold">Take Photo</h3>
+                <p className="text-white/70 mt-1">Use your camera to capture</p>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 text-center"
+              >
+                <Upload className="w-12 h-12 mx-auto mb-3 text-slate-400" />
+                <h3 className="text-xl font-semibold">Upload Image</h3>
+                <p className="text-slate-400 mt-1">Choose from your gallery</p>
+              </motion.button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
