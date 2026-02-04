@@ -1,10 +1,14 @@
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
-  PieChart,
-  Pie,
-  Cell,
+  ComposedChart,
+  Bar,
+  Area,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
   ResponsiveContainer,
-  Legend,
   Tooltip,
 } from "recharts";
 import { useExpenseData } from "@/hooks/useExpenseData";
@@ -21,22 +25,116 @@ import {
 import { Link } from "react-router-dom";
 import { formatCurrency } from "@/lib/format-currency";
 
-const COLORS = ["#10b981", "#f59e0b", "#ef4444"];
+type FilterPeriod = "3d" | "7d" | "2w" | "1m";
+
+interface ChartDataItem {
+  date: string;
+  displayDate: string;
+  amount: number;
+  cumulativeAmount: number;
+  averageAmount: number;
+}
+
+const filterOptions: { value: FilterPeriod; label: string; days: number }[] = [
+  { value: "3d", label: "3 Days", days: 3 },
+  { value: "7d", label: "7 Days", days: 7 },
+  { value: "2w", label: "2 Weeks", days: 14 },
+  { value: "1m", label: "1 Month", days: 30 },
+];
+
+// Custom Tooltip Component
+const CustomTooltip = ({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: ChartDataItem }>;
+}) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload as ChartDataItem;
+    return (
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 shadow-xl">
+        <p className="text-white font-semibold mb-2">{data.displayDate}</p>
+        <div className="space-y-1">
+          <p className="text-sm">
+            <span className="text-indigo-400">● Daily: </span>
+            <span className="text-white font-medium">
+              {formatCurrency({ price: data.amount })}
+            </span>
+          </p>
+          <p className="text-sm">
+            <span className="text-purple-400">● Cumulative: </span>
+            <span className="text-white font-medium">
+              {formatCurrency({ price: data.cumulativeAmount })}
+            </span>
+          </p>
+          <p className="text-sm">
+            <span className="text-orange-400">● Avg/Day: </span>
+            <span className="text-white font-medium">
+              {formatCurrency({ price: data.averageAmount })}
+            </span>
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 export default function Home() {
   const { totalSpent, remaining, settings, alerts, receipts, items } =
     useExpenseData();
+  const [selectedFilter, setSelectedFilter] = useState<FilterPeriod>("7d");
 
-  const budget = settings?.budget ?? 0;
   const holding = settings?.holding ?? 0;
 
-  const chartData = [
-    { name: "Remaining", value: Math.max(remaining, 0) },
-    { name: "Spent", value: totalSpent },
-    ...(totalSpent > budget
-      ? [{ name: "Over Budget", value: totalSpent - budget }]
-      : []),
-  ].filter((d) => d.value > 0);
+  // Generate chart data based on selected filter
+  const chartData = useMemo((): ChartDataItem[] => {
+    const filterDays =
+      filterOptions.find((f) => f.value === selectedFilter)?.days ?? 7;
+    const now = new Date();
+    const dailySpending: Record<string, number> = {};
+
+    // Initialize all days in the range
+    for (let i = filterDays - 1; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const dateKey = date.toISOString().split("T")[0];
+      dailySpending[dateKey] = 0;
+    }
+
+    // Aggregate spending by date from items
+    items.forEach((item) => {
+      const itemDate = new Date(item.date);
+      const dateKey = itemDate.toISOString().split("T")[0];
+      if (dailySpending.hasOwnProperty(dateKey)) {
+        dailySpending[dateKey] += item.price * item.quantity;
+      }
+    });
+
+    // Convert to chart data with cumulative and average
+    let cumulative = 0;
+    let dayCount = 0;
+    return Object.entries(dailySpending)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, amount]) => {
+        cumulative += amount;
+        dayCount++;
+        const dateObj = new Date(date);
+
+        return {
+          date,
+          displayDate: dateObj.toLocaleDateString("en-GB", {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+          }),
+          amount,
+          cumulativeAmount: cumulative,
+          averageAmount: cumulative / dayCount,
+        };
+      });
+  }, [items, selectedFilter]);
 
   const getAlertIcon = (type: string) => {
     switch (type) {
@@ -141,49 +239,142 @@ export default function Home() {
         </motion.div>
       </div>
 
-      {/* Chart */}
+      {/* Spending Analysis Chart */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
         className="mx-6 bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50 mb-6"
       >
-        <h2 className="text-lg font-semibold mb-4">Budget Overview</h2>
-        {chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={chartData}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-                paddingAngle={5}
-                dataKey="value"
+        {/* Chart Header with Filter Buttons */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <h2 className="text-lg font-semibold">Spending Analysis</h2>
+          <div className="flex gap-2">
+            {filterOptions.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setSelectedFilter(option.value)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 ${
+                  selectedFilter === option.value
+                    ? "bg-linear-to-r from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/25"
+                    : "bg-slate-700/50 text-slate-400 hover:bg-slate-700 hover:text-white"
+                }`}
               >
-                {chartData.map((_, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={COLORS[index % COLORS.length]}
-                  />
-                ))}
-              </Pie>
-              <Tooltip
-                formatter={(value: number | undefined) =>
-                  formatCurrency({ price: value ?? 0 })
-                }
-                contentStyle={{
-                  backgroundColor: "#1e293b",
-                  border: "1px solid #334155",
-                  borderRadius: "8px",
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {chartData.some((d) => d.amount > 0) ? (
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart
+                data={chartData}
+                margin={{
+                  top: 10,
+                  right: 10,
+                  left: 0,
+                  bottom: 40,
                 }}
-              />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
+              >
+                <defs>
+                  <linearGradient
+                    id="cumulativeGradient"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.8} />
+                    <stop offset="50%" stopColor="#a78bfa" stopOpacity={0.5} />
+                    <stop offset="100%" stopColor="#c4b5fd" stopOpacity={0.1} />
+                  </linearGradient>
+                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.9} />
+                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0.7} />
+                  </linearGradient>
+                </defs>
+
+                <CartesianGrid
+                  stroke="#334155"
+                  strokeDasharray="3 3"
+                  opacity={0.4}
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="displayDate"
+                  tick={{ fontSize: 10, fill: "#94a3b8" }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                  interval={0}
+                  axisLine={{ stroke: "#475569" }}
+                  tickLine={{ stroke: "#475569" }}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "#94a3b8" }}
+                  axisLine={{ stroke: "#475569" }}
+                  tickLine={{ stroke: "#475569" }}
+                  tickFormatter={(value) => `£${value}`}
+                  width={50}
+                />
+                <Tooltip content={<CustomTooltip />} />
+
+                {/* Cumulative spending area with wave effect */}
+                <Area
+                  type="monotone"
+                  dataKey="cumulativeAmount"
+                  fill="url(#cumulativeGradient)"
+                  stroke="#8b5cf6"
+                  strokeWidth={2}
+                  name="Cumulative"
+                  connectNulls={true}
+                  dot={false}
+                />
+
+                {/* Daily spending bars */}
+                <Bar
+                  dataKey="amount"
+                  barSize={20}
+                  fill="url(#barGradient)"
+                  name="Daily Spending"
+                  radius={[4, 4, 0, 0]}
+                />
+
+                {/* Average spending line */}
+                <Line
+                  type="monotone"
+                  dataKey="averageAmount"
+                  stroke="#f97316"
+                  strokeWidth={2}
+                  dot={{
+                    r: 3,
+                    fill: "#f97316",
+                    stroke: "#fff",
+                    strokeWidth: 1.5,
+                  }}
+                  activeDot={{
+                    r: 5,
+                    fill: "#f97316",
+                    stroke: "#fff",
+                    strokeWidth: 2,
+                  }}
+                  name="Running Average"
+                  connectNulls={true}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
         ) : (
-          <div className="h-[200px] flex items-center justify-center text-slate-500">
-            <p>No expenses yet. Start scanning receipts!</p>
+          <div className="h-72 flex items-center justify-center text-slate-500">
+            <div className="text-center">
+              <ShoppingBag className="size-12 mx-auto mb-3 opacity-50" />
+              <p>No expenses in this period.</p>
+              <p className="text-sm mt-1">
+                Start scanning receipts to see your spending!
+              </p>
+            </div>
           </div>
         )}
       </motion.div>

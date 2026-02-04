@@ -12,6 +12,7 @@ import {
   AlertCircle,
   RotateCcw,
   Sparkles,
+  CalendarDays,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -32,6 +33,9 @@ export default function ScanPage() {
     items: { name: string; quantity: number; price: number; date: Date }[];
     total?: number;
   } | null>(null);
+  const [receiptDate, setReceiptDate] = useState<string>(
+    new Date().toISOString().split("T")[0],
+  );
 
   const hasApiKey = Boolean(settings?.openaiKey);
 
@@ -76,9 +80,13 @@ export default function ScanPage() {
       );
 
     try {
+      const selectedDate = new Date(receiptDate);
+      // Ensure date is set to start of day in local timezone
+      selectedDate.setHours(12, 0, 0, 0);
+
       await addReceiptWithItems(
         {
-          date: new Date(),
+          date: selectedDate,
           totalAmount: total,
           merchant: parsedData.merchant,
           imageUrl: capturedImage ?? undefined,
@@ -97,6 +105,7 @@ export default function ScanPage() {
   const reset = () => {
     setCapturedImage(null);
     setParsedData(null);
+    setReceiptDate(new Date().toISOString().split("T")[0]);
     clearError();
   };
 
@@ -273,6 +282,24 @@ export default function ScanPage() {
                     </p>
                   </div>
                 )}
+
+                {/* Receipt Date Picker */}
+                <div className="mb-4 pb-4 border-b border-slate-700">
+                  <label className="text-slate-400 text-sm flex items-center gap-2 mb-2">
+                    <CalendarDays className="size-4" />
+                    Receipt Date
+                  </label>
+                  <input
+                    type="date"
+                    value={receiptDate}
+                    onChange={(e) => setReceiptDate(e.target.value)}
+                    max={new Date().toISOString().split("T")[0]}
+                    className="w-full bg-slate-600/50 border border-slate-600 rounded-lg px-3 py-2.5 text-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 scheme-dark"
+                  />
+                  <p className="text-xs text-slate-500 mt-1.5">
+                    Change this if the receipt is from a different day
+                  </p>
+                </div>
 
                 <div className="space-y-3">
                   <span className="text-slate-400 text-sm">
