@@ -13,6 +13,8 @@ import {
   RotateCcw,
   Sparkles,
   CalendarDays,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -132,6 +134,39 @@ export default function ScanPage() {
       items: updatedItems,
       // Recalculate total when items change
       total: updatedItems.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0,
+      ),
+    });
+  };
+
+  const addItem = () => {
+    if (!parsedData) return;
+
+    setParsedData({
+      ...parsedData,
+      items: [
+        ...parsedData.items,
+        {
+          name: "",
+          quantity: 1,
+          price: 0,
+          date: new Date(receiptDate),
+        },
+      ],
+    });
+  };
+
+  const removeItem = (index: number) => {
+    if (!parsedData) return;
+
+    const newItems = parsedData.items.filter((_, i) => i !== index);
+
+    setParsedData({
+      ...parsedData,
+      items: newItems,
+      // Recalculate total when items change
+      total: newItems.reduce(
         (sum, item) => sum + item.price * item.quantity,
         0,
       ),
@@ -314,15 +349,23 @@ export default function ScanPage() {
                       className="bg-slate-700/30 p-3 rounded-xl space-y-2"
                     >
                       {/* Item Name */}
-                      <input
-                        type="text"
-                        value={item.name}
-                        onChange={(e) =>
-                          updateItem(index, "name", e.target.value)
-                        }
-                        className="w-full bg-slate-600/50 border border-slate-600 rounded-lg px-3 py-2 text-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
-                        placeholder="Item name"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={item.name}
+                          onChange={(e) =>
+                            updateItem(index, "name", e.target.value)
+                          }
+                          className="flex-1 bg-slate-600/50 border border-slate-600 rounded-lg px-3 py-2 text-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                          placeholder="Item name"
+                        />
+                        <button
+                          onClick={() => removeItem(index)}
+                          className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors"
+                        >
+                          <Trash2 className="size-5" />
+                        </button>
+                      </div>
                       <div className="flex gap-3">
                         {/* Quantity */}
                         <div className="flex-1">
@@ -369,6 +412,13 @@ export default function ScanPage() {
                       </div>
                     </motion.div>
                   ))}
+                  <button
+                    onClick={addItem}
+                    className="w-full py-3 border-2 border-dashed border-slate-700 rounded-xl text-slate-400 font-medium hover:border-emerald-500/50 hover:text-emerald-400 hover:bg-emerald-500/5 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Plus className="size-5" />
+                    Add Item
+                  </button>
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-slate-700 flex justify-between items-center">
