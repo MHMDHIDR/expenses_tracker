@@ -18,6 +18,14 @@ export interface Item {
   date: Date;
 }
 
+export interface Income {
+  id?: number;
+  amount: number;
+  source: string;
+  description?: string;
+  date: Date;
+}
+
 export interface UserSettings {
   id?: string;
   budget: number;

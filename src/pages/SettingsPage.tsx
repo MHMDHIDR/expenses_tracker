@@ -116,10 +116,10 @@ export default function SettingsPage() {
             <div className="p-2 bg-cyan-500/20 rounded-xl">
               <Wallet className="size-5 text-cyan-400" />
             </div>
-            <h2 className="text-lg font-semibold">Current Holdings</h2>
+            <h2 className="text-lg font-semibold">Initial Balance</h2>
           </div>
           <p className="text-slate-400 text-sm mb-3">
-            Your available funds to track spending against
+            The starting amount in your account before tracking
           </p>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">

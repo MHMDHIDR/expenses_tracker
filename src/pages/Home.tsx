@@ -82,11 +82,9 @@ const CustomTooltip = ({
 };
 
 export default function Home() {
-  const { totalSpent, remaining, settings, alerts, receipts, items } =
+  const { weeklySpent, remaining, holdings, alerts, receipts, items } =
     useExpenseData();
   const [selectedFilter, setSelectedFilter] = useState<FilterPeriod>("7d");
-
-  const holding = settings?.holding ?? 0;
 
   // Generate chart data based on selected filter
   const chartData = useMemo((): ChartDataItem[] => {
@@ -186,10 +184,10 @@ export default function Home() {
         >
           <div className="flex items-center gap-2 text-slate-400 mb-2">
             <Wallet className="size-4" />
-            <span className="text-xs font-medium">Holdings</span>
+            <span className="text-xs font-medium">Current Balance</span>
           </div>
           <p className="text-2xl font-bold text-white">
-            {formatCurrency({ price: holding })}
+            {formatCurrency({ price: holdings })}
           </p>
         </motion.div>
 
@@ -201,10 +199,10 @@ export default function Home() {
         >
           <div className="flex items-center gap-2 text-slate-400 mb-2">
             <TrendingDown className="size-4" />
-            <span className="text-xs font-medium">Spent</span>
+            <span className="text-xs font-medium">Weekly Spend</span>
           </div>
           <p className="text-2xl font-bold text-rose-400">
-            {formatCurrency({ price: totalSpent })}
+            {formatCurrency({ price: weeklySpent })}
           </p>
         </motion.div>
 
@@ -216,7 +214,7 @@ export default function Home() {
         >
           <div className="flex items-center gap-2 text-slate-400 mb-2">
             <TrendingUp className="size-4" />
-            <span className="text-xs font-medium">Remaining</span>
+            <span className="text-xs font-medium">Weekly Budget Left</span>
           </div>
           <p
             className={`text-2xl font-bold ${remaining >= 0 ? "text-emerald-400" : "text-red-400"}`}
@@ -272,10 +270,10 @@ export default function Home() {
               <ComposedChart
                 data={chartData}
                 margin={{
-                  top: 10,
-                  right: 10,
-                  left: 0,
-                  bottom: 40,
+                  top: 1,
+                  right: 0,
+                  left: -30,
+                  bottom: -30,
                 }}
               >
                 <defs>

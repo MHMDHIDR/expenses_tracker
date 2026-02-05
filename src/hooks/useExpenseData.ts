@@ -5,15 +5,17 @@ import type {
   Item,
   UserSettings,
   BudgetAlert,
+  Income,
 } from "@/types/expenses";
 import { useMemo, useCallback } from "react";
 import { formatCurrency } from "@/lib/format-currency";
+import { startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
 
 // Default settings
 const DEFAULT_SETTINGS: UserSettings = {
   id: "user_settings",
-  budget: 500,
-  holding: 1000,
+  budget: 500, // Now treated as "Weekly Budget"
+  holding: 1000, // Now treated as "Initial Balance"
   openaiKey: "",
 };
 
@@ -24,61 +26,88 @@ export function useExpenseData() {
     useLiveQuery(() => db.items.orderBy("date").reverse().toArray()) ?? [];
   const settings =
     useLiveQuery(() => db.settings.get("user_settings")) ?? DEFAULT_SETTINGS;
+  const incomes =
+    useLiveQuery(() => db.incomes.orderBy("date").reverse().toArray()) ?? [];
+
+  // Data helpers
+  const today = new Date();
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday start
+  const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
 
   // Calculated values
   const totalSpent = useMemo(() => {
     return receipts.reduce((sum, r) => sum + r.totalAmount, 0);
   }, [receipts]);
 
-  const remaining = useMemo(() => {
-    return (settings?.holding ?? 0) - totalSpent;
-  }, [settings?.holding, totalSpent]);
+  const totalIncome = useMemo(() => {
+    return incomes.reduce((sum, i) => sum + i.amount, 0);
+  }, [incomes]);
+
+  const currentHoldings = useMemo(() => {
+    // Holdings = Initial Balance + Total Income - Total Spent
+    const initialBalance = settings?.holding ?? 0;
+    return initialBalance + totalIncome - totalSpent;
+  }, [settings?.holding, totalIncome, totalSpent]);
+
+  const weeklySpent = useMemo(() => {
+    return items
+      .filter((item) => {
+        const itemDate = new Date(item.date);
+        return isWithinInterval(itemDate, { start: weekStart, end: weekEnd });
+      })
+      .reduce((sum, item) => sum + item.price * item.quantity, 0);
+  }, [items, weekStart, weekEnd]);
+
+  const weeklyRemaining = useMemo(() => {
+    const budget = settings?.budget ?? 0;
+    return budget - weeklySpent;
+  }, [settings?.budget, weeklySpent]);
 
   const spendingPercentage = useMemo(() => {
-    if (!settings?.budget || settings.budget === 0) return 0;
-    return Math.min((totalSpent / settings.budget) * 100, 100);
-  }, [totalSpent, settings?.budget]);
+    const budget = settings?.budget ?? 0;
+    if (!budget || budget === 0) return 0;
+    return Math.min((weeklySpent / budget) * 100, 100);
+  }, [weeklySpent, settings?.budget]);
 
   // Budget alerts
   const alerts = useMemo((): BudgetAlert[] => {
     const alertList: BudgetAlert[] = [];
-    const budget = settings?.budget ?? 0;
-    const holding = settings?.holding ?? 0;
+    const budget = settings?.budget ?? 0; // Weekly Budget
 
     if (budget > 0) {
-      const percentUsed = (totalSpent / budget) * 100;
+      const percentUsed = (weeklySpent / budget) * 100;
 
       if (percentUsed >= 100) {
         alertList.push({
           type: "danger",
-          title: "Budget Exceeded!",
-          message: `You've spent ${(percentUsed - 100).toFixed(1)}% over your budget. Consider reviewing your expenses.`,
+          title: "Weekly Budget Exceeded!",
+          message: `You've spent ${(percentUsed - 100).toFixed(
+            1,
+          )}% over your weekly budget.`,
         });
       } else if (percentUsed >= 80) {
         alertList.push({
           type: "warning",
-          title: "Budget Alert",
-          message: `You've used ${percentUsed.toFixed(1)}% of your budget. Be mindful of remaining expenses.`,
-        });
-      } else if (percentUsed <= 30 && totalSpent > 0) {
-        alertList.push({
-          type: "success",
-          title: "Great Savings!",
-          message: `You've only used ${percentUsed.toFixed(1)}% of your budget. Consider investing the surplus!`,
+          title: "Weekly Budget Alert",
+          message: `You've used ${percentUsed.toFixed(
+            1,
+          )}% of your weekly budget.`,
         });
       }
     }
 
-    if (remaining < 50 && holding > 0) {
+    if (currentHoldings < 100) {
       alertList.push({
         type: "danger",
-        title: "Low Funds",
-        message: `Only ${formatCurrency({ price: remaining })} remaining. Time to watch your spending!`,
+        title: "Low Account Balance",
+        message: `Only ${formatCurrency({
+          price: currentHoldings,
+        })} remaining in your account.`,
       });
     }
 
     return alertList;
-  }, [totalSpent, remaining, settings?.budget, settings?.holding]);
+  }, [weeklySpent, currentHoldings, settings?.budget]);
 
   // CRUD Operations
   const addReceipt = useCallback(async (receipt: Omit<Receipt, "id">) => {
@@ -108,6 +137,14 @@ export function useExpenseData() {
     },
     [],
   );
+
+  const addIncome = useCallback(async (income: Omit<Income, "id">) => {
+    return await db.incomes.add(income as Income);
+  }, []);
+
+  const deleteIncome = useCallback(async (id: number) => {
+    return await db.incomes.delete(id);
+  }, []);
 
   const updateSettings = useCallback(
     async (newSettings: Partial<UserSettings>) => {
@@ -172,10 +209,14 @@ export function useExpenseData() {
     items,
     settings,
     itemsByDate,
+    incomes,
 
     // Calculated
     totalSpent,
-    remaining,
+    weeklySpent,
+    totalIncome,
+    remaining: weeklyRemaining, // Export as "remaining" for backward compatibility with UI, but it's weekly remaining budget
+    holdings: currentHoldings, // Export as "holdings" (current balance)
     spendingPercentage,
     alerts,
 
@@ -183,6 +224,8 @@ export function useExpenseData() {
     addReceipt,
     addItem,
     addReceiptWithItems,
+    addIncome,
+    deleteIncome,
     updateSettings,
     deleteReceipt,
     deleteItem,
