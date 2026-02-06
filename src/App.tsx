@@ -1,7 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
-import { useEffect } from "react";
-import { syncService } from "@/services/syncService";
 import BottomNav from "@/components/BottomNav";
 import Home from "@/pages/Home";
 import ScanPage from "@/pages/ScanPage";
@@ -10,14 +8,10 @@ import SettingsPage from "@/pages/SettingsPage";
 import NotFound from "@/pages/NotFound";
 import OfflineBanner from "@/components/OfflineBanner";
 
-export default function App() {
-  useEffect(() => {
-    // Initialize sync service
-    if (navigator.onLine) {
-      syncService.startPeriodicSync();
-    }
-  }, []);
+// Note: syncService is a singleton that initializes itself on import
+// No need to manually start it here - it handles its own lifecycle
 
+export default function App() {
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-slate-950">

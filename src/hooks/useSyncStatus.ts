@@ -21,6 +21,8 @@ export function useSyncStatus() {
   }, []);
 
   const syncNow = async () => {
+    // Reset failures before attempting sync
+    syncService.resetFailures();
     return await syncService.sync();
   };
 
@@ -32,10 +34,15 @@ export function useSyncStatus() {
     return await syncService.restoreFromCloud();
   };
 
+  const resetFailures = () => {
+    syncService.resetFailures();
+  };
+
   return {
     ...status,
     syncNow,
     pushAllToCloud,
     restoreFromCloud,
+    resetFailures,
   };
 }

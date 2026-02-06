@@ -28,10 +28,8 @@ export function useExpenseData() {
 
     syncService.on("status-change", handleStatusChange);
 
-    // Start periodic sync if online
-    if (navigator.onLine) {
-      syncService.startPeriodicSync();
-    }
+    // Note: syncService is a singleton that handles its own initialization.
+    // No need to call startPeriodicSync() here - it's done in the service constructor.
 
     return () => {
       syncService.off("status-change", handleStatusChange);

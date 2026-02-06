@@ -7,6 +7,7 @@
  * - Background sync when connection is restored
  * - Conflict resolution (local-first strategy)
  * - Retry logic for failed syncs
+ * - Debouncing to prevent infinite loops
  */
 
 import { offlineStorage, offlineDB } from "./offlineStorage";
@@ -44,30 +45,66 @@ class SyncService {
   private syncInterval: ReturnType<typeof setInterval> | null = null;
   private readonly SYNC_INTERVAL_MS = 30000; // 30 seconds
   private readonly MAX_RETRY_COUNT = 3;
+  private readonly SYNC_DEBOUNCE_MS = 2000; // 2 seconds debounce
+  private readonly MIN_SYNC_INTERVAL_MS = 5000; // Minimum 5 seconds between syncs
+
+  // Guards to prevent multiple initializations and rapid sync calls
+  private initialized = false;
+  private syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastSyncAttempt: number = 0;
+  private consecutiveFailures: number = 0;
+  private readonly MAX_CONSECUTIVE_FAILURES = 5;
 
   constructor() {
-    if (typeof window !== "undefined") {
-      // Listen for online/offline events
-      window.addEventListener("online", this.handleOnline);
-      window.addEventListener("offline", this.handleOffline);
+    this.initialize();
+  }
 
-      // Listen for local data changes
-      window.addEventListener("expense-tracker:data-changed", () => {
-        this.updatePendingCount();
-        if (this.status.isOnline) {
-          this.sync();
-        }
-      });
+  private initialize(): void {
+    // Prevent multiple initializations
+    if (this.initialized || typeof window === "undefined") {
+      return;
+    }
+    this.initialized = true;
 
-      // Update pending changes count
-      this.updatePendingCount();
+    // Listen for online/offline events
+    window.addEventListener("online", this.handleOnline);
+    window.addEventListener("offline", this.handleOffline);
 
-      // Start sync if already online
-      if (this.status.isOnline) {
+    // Listen for local data changes - use debounced sync
+    window.addEventListener(
+      "expense-tracker:data-changed",
+      this.handleDataChanged,
+    );
+
+    // Update pending changes count (don't trigger sync)
+    this.updatePendingCount();
+
+    // Schedule initial sync after a short delay (not immediate)
+    if (this.status.isOnline) {
+      setTimeout(() => {
         this.sync();
         this.startPeriodicSync();
-      }
+      }, 1000);
     }
+  }
+
+  // Debounced handler for data changes
+  private handleDataChanged = (): void => {
+    this.updatePendingCount();
+    if (this.status.isOnline && !this.status.isSyncing) {
+      this.debouncedSync();
+    }
+  };
+
+  // Debounced sync to prevent rapid-fire requests
+  private debouncedSync(): void {
+    if (this.syncDebounceTimer) {
+      clearTimeout(this.syncDebounceTimer);
+    }
+    this.syncDebounceTimer = setTimeout(() => {
+      this.syncDebounceTimer = null;
+      this.sync();
+    }, this.SYNC_DEBOUNCE_MS);
   }
 
   // Event handling
@@ -93,9 +130,10 @@ class SyncService {
   // Online/offline handlers
   private handleOnline = (): void => {
     this.status.isOnline = true;
+    this.consecutiveFailures = 0; // Reset failure count when coming back online
     this.emit("status-change");
-    // Trigger sync when coming back online
-    this.sync();
+    // Trigger sync when coming back online (debounced)
+    this.debouncedSync();
     // Start periodic sync
     this.startPeriodicSync();
   };
@@ -105,14 +143,25 @@ class SyncService {
     this.emit("status-change");
     // Stop periodic sync
     this.stopPeriodicSync();
+    // Cancel any pending debounced syncs
+    if (this.syncDebounceTimer) {
+      clearTimeout(this.syncDebounceTimer);
+      this.syncDebounceTimer = null;
+    }
   };
 
-  // Periodic sync
+  // Periodic sync - with guard against duplicate intervals
   startPeriodicSync(): void {
+    // Don't start if already running
     if (this.syncInterval) return;
 
     this.syncInterval = setInterval(() => {
-      if (this.status.isOnline && !this.status.isSyncing) {
+      // Only sync if online, not already syncing, and not too many failures
+      if (
+        this.status.isOnline &&
+        !this.status.isSyncing &&
+        this.consecutiveFailures < this.MAX_CONSECUTIVE_FAILURES
+      ) {
         this.sync();
       }
     }, this.SYNC_INTERVAL_MS);
@@ -141,12 +190,33 @@ class SyncService {
     return { ...this.status };
   }
 
-  // Main sync function
+  // Main sync function with throttling and guards
   async sync(): Promise<boolean> {
-    if (this.status.isSyncing || !this.status.isOnline) {
+    // Guard: Don't sync if already syncing
+    if (this.status.isSyncing) {
       return false;
     }
 
+    // Guard: Don't sync if offline
+    if (!this.status.isOnline) {
+      return false;
+    }
+
+    // Guard: Throttle sync attempts
+    const now = Date.now();
+    if (now - this.lastSyncAttempt < this.MIN_SYNC_INTERVAL_MS) {
+      return false;
+    }
+
+    // Guard: Stop if too many consecutive failures
+    if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+      this.status.error =
+        "Sync paused due to repeated failures. Please try again later.";
+      this.emit("status-change");
+      return false;
+    }
+
+    this.lastSyncAttempt = now;
     this.status.isSyncing = true;
     this.status.error = null;
     this.emit("sync-start");
@@ -155,39 +225,61 @@ class SyncService {
       // Get pending sync items
       const pendingItems = await offlineStorage.getPendingSyncItems();
 
+      // If no pending items, we're done
+      if (pendingItems.length === 0) {
+        this.status.lastSyncAt = new Date();
+        this.status.isSyncing = false;
+        this.consecutiveFailures = 0;
+        this.emit("sync-complete");
+        return true;
+      }
+
+      let successCount = 0;
+      let failureCount = 0;
+
       // Process each pending item
       for (const item of pendingItems) {
         const success = await this.processSyncItem(item);
 
         if (success) {
           await offlineStorage.removeSyncItem(item.id!);
+          successCount++;
         } else if (item.retryCount >= this.MAX_RETRY_COUNT) {
           // Remove failed items after max retries
           console.error(
-            `Sync item ${item.id} failed after ${this.MAX_RETRY_COUNT} retries`,
+            `Sync item ${item.id} failed after ${this.MAX_RETRY_COUNT} retries, removing from queue`,
           );
           await offlineStorage.removeSyncItem(item.id!);
+          failureCount++;
         } else {
           await offlineStorage.incrementRetryCount(item.id!);
+          failureCount++;
         }
       }
 
       this.status.lastSyncAt = new Date();
       this.status.isSyncing = false;
       await this.updatePendingCount();
-      this.emit("sync-complete");
 
-      // Check if more items were added while syncing
-      const remainingItems = await offlineStorage.getPendingSyncItems();
-      if (remainingItems.length > 0) {
-        this.sync();
+      // Track consecutive failures
+      if (failureCount > 0 && successCount === 0) {
+        this.consecutiveFailures++;
+      } else {
+        this.consecutiveFailures = 0;
       }
 
-      return true;
+      this.emit("sync-complete");
+
+      // IMPORTANT: Do NOT recursively call sync() here!
+      // The periodic sync will handle pending items on the next interval.
+      // This prevents infinite loops when sync keeps failing.
+
+      return failureCount === 0;
     } catch (error) {
       this.status.error =
         error instanceof Error ? error.message : "Sync failed";
       this.status.isSyncing = false;
+      this.consecutiveFailures++;
       this.emit("sync-error");
       return false;
     }
@@ -378,6 +470,7 @@ class SyncService {
       }
 
       this.status.lastSyncAt = new Date();
+      this.consecutiveFailures = 0;
       this.emit("sync-complete");
       return true;
     } catch (error) {
@@ -398,6 +491,9 @@ class SyncService {
       this.emit("status-change");
       return false;
     }
+
+    // Reset consecutive failures when manually pushing
+    this.consecutiveFailures = 0;
 
     this.status.isSyncing = true;
     this.status.error = null;
@@ -504,14 +600,30 @@ class SyncService {
     }
   }
 
+  // Reset failure counter (useful when user manually triggers sync)
+  resetFailures(): void {
+    this.consecutiveFailures = 0;
+    this.status.error = null;
+    this.emit("status-change");
+  }
+
   // Cleanup
   destroy(): void {
     if (typeof window !== "undefined") {
       window.removeEventListener("online", this.handleOnline);
       window.removeEventListener("offline", this.handleOffline);
+      window.removeEventListener(
+        "expense-tracker:data-changed",
+        this.handleDataChanged,
+      );
+    }
+    if (this.syncDebounceTimer) {
+      clearTimeout(this.syncDebounceTimer);
+      this.syncDebounceTimer = null;
     }
     this.stopPeriodicSync();
     this.listeners.clear();
+    this.initialized = false;
   }
 }
 
