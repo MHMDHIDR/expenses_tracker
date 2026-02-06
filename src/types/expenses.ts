@@ -11,7 +11,7 @@ export interface Receipt {
 
 export interface Item {
   id?: number;
-  receiptId: number;
+  receiptId?: number;
   name: string;
   quantity: number;
   price: number;

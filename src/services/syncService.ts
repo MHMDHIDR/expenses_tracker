@@ -386,6 +386,124 @@ class SyncService {
     }
   }
 
+  /**
+   * Push all local data to cloud
+   * This syncs ALL local items, receipts, and settings to MongoDB,
+   * not just items in the sync queue. Useful for initial sync or
+   * when the user explicitly wants to push all local data.
+   */
+  async pushAllToCloud(): Promise<boolean> {
+    if (!this.status.isOnline) {
+      this.status.error = "Cannot sync while offline";
+      this.emit("status-change");
+      return false;
+    }
+
+    this.status.isSyncing = true;
+    this.status.error = null;
+    this.emit("sync-start");
+
+    try {
+      // Get all local data
+      const localReceipts = await offlineDB.receipts.toArray();
+      const localItems = await offlineDB.items.toArray();
+      const localSettings = await offlineDB.settings.get("user_settings");
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      // Sync receipts that don't have a cloudId (never synced)
+      for (const receipt of localReceipts) {
+        if (!receipt.syncMeta?.cloudId) {
+          try {
+            const { id, syncMeta, ...receiptData } = receipt;
+            const result = await apiClient.createReceipt(receiptData);
+            if (result.success && result.data) {
+              await offlineStorage.markReceiptSynced(
+                id as number,
+                result.data._id,
+              );
+              successCount++;
+            } else {
+              errorCount++;
+            }
+          } catch (e) {
+            console.error("Failed to sync receipt:", e);
+            errorCount++;
+          }
+        }
+      }
+
+      // Sync items that don't have a cloudId (never synced)
+      for (const item of localItems) {
+        if (!item.syncMeta?.cloudId) {
+          try {
+            const { id, syncMeta, ...itemData } = item;
+            const result = await apiClient.createItem(itemData);
+            if (result.success && result.data) {
+              await offlineStorage.markItemSynced(
+                id as number,
+                result.data._id,
+              );
+              successCount++;
+            } else {
+              errorCount++;
+            }
+          } catch (e) {
+            console.error("Failed to sync item:", e);
+            errorCount++;
+          }
+        }
+      }
+
+      // Sync settings
+      if (localSettings && !localSettings.syncMeta?.cloudId) {
+        try {
+          const { id, syncMeta, ...settingsData } = localSettings;
+          const result = await apiClient.updateSettings(settingsData);
+          if (result.success && result.data) {
+            await offlineStorage.markSettingsSynced(result.data._id);
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (e) {
+          console.error("Failed to sync settings:", e);
+          errorCount++;
+        }
+      }
+
+      // Also process any remaining sync queue items
+      const pendingItems = await offlineStorage.getPendingSyncItems();
+      for (const item of pendingItems) {
+        const success = await this.processSyncItem(item);
+        if (success) {
+          await offlineStorage.removeSyncItem(item.id!);
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      }
+
+      this.status.lastSyncAt = new Date();
+      this.status.isSyncing = false;
+      await this.updatePendingCount();
+
+      if (errorCount > 0) {
+        this.status.error = `Synced ${successCount} items, ${errorCount} failed`;
+      }
+
+      this.emit("sync-complete");
+      return errorCount === 0;
+    } catch (error) {
+      this.status.error =
+        error instanceof Error ? error.message : "Push to cloud failed";
+      this.status.isSyncing = false;
+      this.emit("sync-error");
+      return false;
+    }
+  }
+
   // Cleanup
   destroy(): void {
     if (typeof window !== "undefined") {

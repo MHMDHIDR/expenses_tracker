@@ -16,8 +16,14 @@ import { useSyncStatus } from "@/hooks/useSyncStatus";
 
 export default function SettingsPage() {
   const { settings, updateSettings, receipts, items } = useExpenseData();
-  const { isOnline, isSyncing, lastSyncAt, pendingChanges, syncNow } =
-    useSyncStatus();
+  const {
+    isOnline,
+    isSyncing,
+    lastSyncAt,
+    pendingChanges,
+    error,
+    pushAllToCloud,
+  } = useSyncStatus();
 
   const [budget, setBudget] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -45,11 +51,11 @@ export default function SettingsPage() {
 
   const handleSync = async () => {
     try {
-      const success = await syncNow();
+      const success = await pushAllToCloud();
       if (success) {
-        toast.success("Synced with cloud successfully");
+        toast.success("All data synced to cloud successfully!");
       } else {
-        toast.error("Sync failed");
+        toast.error("Some items failed to sync. Check console for details.");
       }
     } catch (error) {
       toast.error("Sync failed");
@@ -169,6 +175,7 @@ export default function SettingsPage() {
                   {pendingChanges} changes pending
                 </p>
               )}
+              {error && <p className="text-red-400 mt-1 text-xs">{error}</p>}
             </div>
 
             <button

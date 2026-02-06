@@ -150,9 +150,15 @@ app.post(
   asyncHandler(async (req: Request, res: Response) => {
     const { receiptId, name, quantity, price, date } = req.body;
 
+    // Only use receiptId if it's a valid MongoDB ObjectId (24 char hex string)
+    const validReceiptId =
+      typeof receiptId === "string" && /^[a-f\d]{24}$/i.test(receiptId)
+        ? receiptId
+        : undefined;
+
     const item = await prisma.item.create({
       data: {
-        receiptId,
+        receiptId: validReceiptId,
         name,
         quantity: quantity ?? 1,
         price,
@@ -173,21 +179,29 @@ app.post(
     const createdItems = await prisma.$transaction(
       items.map(
         (item: {
-          receiptId: string;
+          receiptId?: string | number;
           name: string;
           quantity?: number;
           price: number;
           date: string;
-        }) =>
-          prisma.item.create({
+        }) => {
+          // Only use receiptId if it's a valid MongoDB ObjectId
+          const validReceiptId =
+            typeof item.receiptId === "string" &&
+            /^[a-f\d]{24}$/i.test(item.receiptId)
+              ? item.receiptId
+              : undefined;
+
+          return prisma.item.create({
             data: {
-              receiptId: item.receiptId,
+              receiptId: validReceiptId,
               name: item.name,
               quantity: item.quantity ?? 1,
               price: item.price,
               date: new Date(item.date),
             },
-          }),
+          });
+        },
       ),
     );
 

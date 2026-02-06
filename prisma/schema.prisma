@@ -24,8 +24,8 @@ model Receipt {
 
 model Item {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  receiptId String   @db.ObjectId
-  receipt   Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  receiptId String?  @db.ObjectId
+  receipt   Receipt? @relation(fields: [receiptId], references: [id], onDelete: Cascade)
   name      String
   quantity  Int      @default(1)
   price     Float
