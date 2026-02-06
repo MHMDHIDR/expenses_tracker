@@ -1,35 +1,20 @@
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import { useExpenseData } from "@/hooks/useExpenseData";
-import {
-  Settings,
-  Key,
-  Wallet,
-  PiggyBank,
-  Save,
-  Eye,
-  EyeOff,
-  Trash2,
-  AlertTriangle,
-} from "lucide-react";
+import { offlineDB } from "@/services/offlineStorage";
+import { motion } from "framer-motion";
+import { AlertTriangle, PiggyBank, Save, Settings, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { db } from "@/db/db";
 
 export default function SettingsPage() {
   const { settings, updateSettings, receipts, items } = useExpenseData();
 
   const [budget, setBudget] = useState("");
-  const [holding, setHolding] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [showApiKey, setShowApiKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   useEffect(() => {
     if (settings) {
       setBudget(settings.budget?.toString() ?? "500");
-      setHolding(settings.holding?.toString() ?? "1000");
-      setApiKey(settings.openaiKey ?? "");
     }
   }, [settings]);
 
@@ -38,8 +23,6 @@ export default function SettingsPage() {
     try {
       await updateSettings({
         budget: parseFloat(budget) || 0,
-        holding: parseFloat(holding) || 0,
-        openaiKey: apiKey,
       });
       toast.success("Settings saved successfully!");
     } catch (error) {
@@ -51,8 +34,8 @@ export default function SettingsPage() {
 
   const handleClearData = async () => {
     try {
-      await db.receipts.clear();
-      await db.items.clear();
+      await offlineDB.receipts.clear();
+      await offlineDB.items.clear();
       toast.success("All expense data cleared");
       setShowClearConfirm(false);
     } catch (error) {
@@ -89,7 +72,8 @@ export default function SettingsPage() {
             <h2 className="text-lg font-semibold">Weekly Budget</h2>
           </div>
           <p className="text-slate-400 text-sm mb-3">
-            Set your weekly spending limit for alerts
+            Set your weekly spending limit. You'll receive alerts when
+            approaching or exceeding this budget.
           </p>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
@@ -105,78 +89,11 @@ export default function SettingsPage() {
           </div>
         </motion.div>
 
-        {/* Holdings */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-cyan-500/20 rounded-xl">
-              <Wallet className="size-5 text-cyan-400" />
-            </div>
-            <h2 className="text-lg font-semibold">Initial Balance</h2>
-          </div>
-          <p className="text-slate-400 text-sm mb-3">
-            The starting amount in your account before tracking
-          </p>
-          <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-              £
-            </span>
-            <input
-              type="number"
-              value={holding}
-              onChange={(e) => setHolding(e.target.value)}
-              placeholder="1000"
-              className="w-full bg-slate-700/50 border border-slate-600 rounded-xl py-3 pl-8 pr-4 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
-            />
-          </div>
-        </motion.div>
-
-        {/* API Key */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-violet-500/20 rounded-xl">
-              <Key className="size-5 text-violet-400" />
-            </div>
-            <h2 className="text-lg font-semibold">OpenAI API Key</h2>
-          </div>
-          <p className="text-slate-400 text-sm mb-3">
-            Required for AI-powered receipt scanning
-          </p>
-          <div className="relative">
-            <input
-              type={showApiKey ? "text" : "password"}
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
-              className="w-full bg-slate-700/50 border border-slate-600 rounded-xl py-3 pl-4 pr-12 text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
-            />
-            <button
-              onClick={() => setShowApiKey(!showApiKey)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
-            >
-              {showApiKey ? (
-                <EyeOff className="size-5" />
-              ) : (
-                <Eye className="size-5" />
-              )}
-            </button>
-          </div>
-        </motion.div>
-
         {/* Save Button */}
         <motion.button
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
+          transition={{ delay: 0.2 }}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={handleSave}
@@ -195,7 +112,7 @@ export default function SettingsPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.25 }}
           className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50"
         >
           <div className="flex items-center gap-3 mb-4">
@@ -249,10 +166,10 @@ export default function SettingsPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
+          transition={{ delay: 0.3 }}
           className="text-center text-slate-500 text-sm py-4"
         >
-          <p>Expense Tracker PWA v1.0.0</p>
+          <p>Expense Tracker PWA v1.1.0</p>
           <p className="mt-1">All data is stored locally on your device</p>
         </motion.div>
       </div>

@@ -25,8 +25,9 @@ export default function ScanPage() {
   const webcamRef = useRef<Webcam>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { settings, addReceiptWithItems } = useExpenseData();
-  const { scanReceipt, isProcessing, error, clearError } = useReceiptScanner();
+  const { addReceiptWithItems } = useExpenseData();
+  const { scanReceipt, isProcessing, error, clearError, isConfigured } =
+    useReceiptScanner();
 
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
@@ -38,8 +39,6 @@ export default function ScanPage() {
   const [receiptDate, setReceiptDate] = useState<string>(
     new Date().toISOString().split("T")[0],
   );
-
-  const hasApiKey = Boolean(settings?.openaiKey);
 
   const capturePhoto = useCallback(() => {
     const imageSrc = webcamRef.current?.getScreenshot();
@@ -61,10 +60,10 @@ export default function ScanPage() {
   };
 
   const processImage = async () => {
-    if (!capturedImage || !settings?.openaiKey) return;
+    if (!capturedImage || !isConfigured) return;
 
     clearError();
-    const result = await scanReceipt(capturedImage, settings.openaiKey);
+    const result = await scanReceipt(capturedImage);
 
     if (result) {
       setParsedData(result);
@@ -173,7 +172,7 @@ export default function ScanPage() {
     });
   };
 
-  if (!hasApiKey) {
+  if (!isConfigured) {
     return (
       <div className="min-h-screen bg-linear-to-br from-slate-950 via-slate-900 to-slate-950 text-white pb-24 flex flex-col items-center justify-center px-6">
         <motion.div
@@ -183,10 +182,22 @@ export default function ScanPage() {
         >
           <AlertCircle className="w-16 h-16 text-amber-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-2">API Key Required</h2>
-          <p className="text-slate-400 mb-6">
-            Please add your OpenAI API key in Settings to use the receipt
-            scanner.
+          <p className="text-slate-400 mb-4">
+            Please add your OpenAI API key to your environment variables to use
+            the receipt scanner.
           </p>
+          <div className="bg-slate-800/50 rounded-xl p-4 mb-6 text-left">
+            <p className="text-slate-400 text-sm mb-2">
+              Add this to your{" "}
+              <code className="bg-slate-700 px-1.5 py-0.5 rounded text-xs">
+                .env
+              </code>{" "}
+              file:
+            </p>
+            <code className="text-cyan-300 text-sm">
+              VITE_OPENAI_API_KEY=sk-your-api-key
+            </code>
+          </div>
           <button
             onClick={() => navigate("/settings")}
             className="bg-linear-to-r from-emerald-500 to-cyan-500 text-white px-6 py-3 rounded-xl font-semibold"

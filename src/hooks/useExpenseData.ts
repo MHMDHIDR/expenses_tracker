@@ -1,33 +1,51 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/db/db";
+import { offlineDB, offlineStorage } from "@/services/offlineStorage";
+import { syncService } from "@/services/syncService";
 import type {
   Receipt,
   Item,
   UserSettings,
   BudgetAlert,
-  Income,
 } from "@/types/expenses";
-import { useMemo, useCallback } from "react";
-import { formatCurrency } from "@/lib/format-currency";
+import { useMemo, useCallback, useEffect, useState } from "react";
 import { startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
 
-// Default settings
+// Default settings (OpenAI key is now from env vars, not stored in DB)
 const DEFAULT_SETTINGS: UserSettings = {
   id: "user_settings",
-  budget: 500, // Now treated as "Weekly Budget"
-  holding: 1000, // Now treated as "Initial Balance"
-  openaiKey: "",
+  budget: 500, // Weekly Budget limit
 };
 
 export function useExpenseData() {
-  // Live queries for reactive data
-  const receipts = useLiveQuery(() => db.receipts.toArray()) ?? [];
+  // Sync status state
+  const [syncStatus, setSyncStatus] = useState(syncService.getStatus());
+
+  // Subscribe to sync status changes
+  useEffect(() => {
+    const handleStatusChange = (status: typeof syncStatus) => {
+      setSyncStatus({ ...status });
+    };
+
+    syncService.on("status-change", handleStatusChange);
+
+    // Start periodic sync if online
+    if (navigator.onLine) {
+      syncService.startPeriodicSync();
+    }
+
+    return () => {
+      syncService.off("status-change", handleStatusChange);
+    };
+  }, []);
+
+  // Live queries for reactive data (using offline storage)
+  const receipts = useLiveQuery(() => offlineDB.receipts.toArray()) ?? [];
   const items =
-    useLiveQuery(() => db.items.orderBy("date").reverse().toArray()) ?? [];
+    useLiveQuery(() => offlineDB.items.orderBy("date").reverse().toArray()) ??
+    [];
   const settings =
-    useLiveQuery(() => db.settings.get("user_settings")) ?? DEFAULT_SETTINGS;
-  const incomes =
-    useLiveQuery(() => db.incomes.orderBy("date").reverse().toArray()) ?? [];
+    useLiveQuery(() => offlineDB.settings.get("user_settings")) ??
+    DEFAULT_SETTINGS;
 
   // Data helpers
   const today = new Date();
@@ -39,16 +57,6 @@ export function useExpenseData() {
     return receipts.reduce((sum, r) => sum + r.totalAmount, 0);
   }, [receipts]);
 
-  const totalIncome = useMemo(() => {
-    return incomes.reduce((sum, i) => sum + i.amount, 0);
-  }, [incomes]);
-
-  const currentHoldings = useMemo(() => {
-    // Holdings = Initial Balance + Total Income - Total Spent
-    const initialBalance = settings?.holding ?? 0;
-    return initialBalance + totalIncome - totalSpent;
-  }, [settings?.holding, totalIncome, totalSpent]);
-
   const weeklySpent = useMemo(() => {
     return items
       .filter((item) => {
@@ -58,32 +66,35 @@ export function useExpenseData() {
       .reduce((sum, item) => sum + item.price * item.quantity, 0);
   }, [items, weekStart, weekEnd]);
 
+  const weeklyBudget = useMemo(() => {
+    return settings?.budget ?? 0;
+  }, [settings?.budget]);
+
   const weeklyRemaining = useMemo(() => {
-    const budget = settings?.budget ?? 0;
-    return budget - weeklySpent;
-  }, [settings?.budget, weeklySpent]);
+    return weeklyBudget - weeklySpent;
+  }, [weeklyBudget, weeklySpent]);
 
   const spendingPercentage = useMemo(() => {
-    const budget = settings?.budget ?? 0;
-    if (!budget || budget === 0) return 0;
-    return Math.min((weeklySpent / budget) * 100, 100);
-  }, [weeklySpent, settings?.budget]);
+    if (!weeklyBudget || weeklyBudget === 0) return 0;
+    return Math.min((weeklySpent / weeklyBudget) * 100, 100);
+  }, [weeklySpent, weeklyBudget]);
 
-  // Budget alerts
+  // Budget alerts - only alert when exceeding budget, no balance tracking
   const alerts = useMemo((): BudgetAlert[] => {
     const alertList: BudgetAlert[] = [];
-    const budget = settings?.budget ?? 0; // Weekly Budget
 
-    if (budget > 0) {
-      const percentUsed = (weeklySpent / budget) * 100;
+    if (weeklyBudget > 0) {
+      const percentUsed = (weeklySpent / weeklyBudget) * 100;
 
       if (percentUsed >= 100) {
         alertList.push({
           type: "danger",
           title: "Weekly Budget Exceeded!",
-          message: `You've spent ${(percentUsed - 100).toFixed(
-            1,
-          )}% over your weekly budget.`,
+          message: `You've spent £${weeklySpent.toFixed(2)} which is ${(
+            percentUsed - 100
+          ).toFixed(1)}% over your weekly budget of £${weeklyBudget.toFixed(
+            2,
+          )}.`,
         });
       } else if (percentUsed >= 80) {
         alertList.push({
@@ -91,31 +102,40 @@ export function useExpenseData() {
           title: "Weekly Budget Alert",
           message: `You've used ${percentUsed.toFixed(
             1,
-          )}% of your weekly budget.`,
+          )}% of your weekly budget (£${weeklySpent.toFixed(
+            2,
+          )} of £${weeklyBudget.toFixed(2)}).`,
+        });
+      } else if (percentUsed <= 50 && weeklySpent > 0) {
+        alertList.push({
+          type: "success",
+          title: "On Track!",
+          message: `You've only used ${percentUsed.toFixed(
+            1,
+          )}% of your weekly budget. Keep it up!`,
         });
       }
     }
 
-    if (currentHoldings < 100) {
-      alertList.push({
-        type: "danger",
-        title: "Low Account Balance",
-        message: `Only ${formatCurrency({
-          price: currentHoldings,
-        })} remaining in your account.`,
-      });
-    }
-
     return alertList;
-  }, [weeklySpent, currentHoldings, settings?.budget]);
+  }, [weeklySpent, weeklyBudget]);
 
-  // CRUD Operations
+  // CRUD Operations - now using offlineStorage with sync support
   const addReceipt = useCallback(async (receipt: Omit<Receipt, "id">) => {
-    return await db.receipts.add(receipt as Receipt);
+    const id = await offlineStorage.addReceipt(receipt);
+    // Trigger sync if online
+    if (navigator.onLine) {
+      syncService.sync();
+    }
+    return id;
   }, []);
 
   const addItem = useCallback(async (item: Omit<Item, "id">) => {
-    return await db.items.add(item as Item);
+    const id = await offlineStorage.addItem(item);
+    if (navigator.onLine) {
+      syncService.sync();
+    }
+    return id;
   }, []);
 
   const addReceiptWithItems = useCallback(
@@ -123,7 +143,7 @@ export function useExpenseData() {
       receipt: Omit<Receipt, "id">,
       itemsToAdd: Omit<Item, "id" | "receiptId">[],
     ) => {
-      const receiptId = await db.receipts.add(receipt as Receipt);
+      const receiptId = await offlineStorage.addReceipt(receipt);
 
       const itemsWithReceiptId = itemsToAdd.map((item) => ({
         ...item,
@@ -131,44 +151,40 @@ export function useExpenseData() {
         date: receipt.date,
       }));
 
-      await db.items.bulkAdd(itemsWithReceiptId as Item[]);
+      await offlineStorage.addItems(itemsWithReceiptId);
+
+      // Trigger sync if online
+      if (navigator.onLine) {
+        syncService.sync();
+      }
 
       return receiptId;
     },
     [],
   );
 
-  const addIncome = useCallback(async (income: Omit<Income, "id">) => {
-    return await db.incomes.add(income as Income);
-  }, []);
-
-  const deleteIncome = useCallback(async (id: number) => {
-    return await db.incomes.delete(id);
-  }, []);
-
   const updateSettings = useCallback(
     async (newSettings: Partial<UserSettings>) => {
-      const current = await db.settings.get("user_settings");
-      if (current) {
-        await db.settings.update("user_settings", newSettings);
-      } else {
-        await db.settings.add({
-          ...DEFAULT_SETTINGS,
-          ...newSettings,
-          id: "user_settings",
-        });
+      await offlineStorage.updateSettings(newSettings);
+      if (navigator.onLine) {
+        syncService.sync();
       }
     },
     [],
   );
 
   const deleteReceipt = useCallback(async (id: number) => {
-    await db.items.where("receiptId").equals(id).delete();
-    await db.receipts.delete(id);
+    await offlineStorage.deleteReceipt(id);
+    if (navigator.onLine) {
+      syncService.sync();
+    }
   }, []);
 
   const deleteItem = useCallback(async (id: number) => {
-    await db.items.delete(id);
+    await offlineStorage.deleteItem(id);
+    if (navigator.onLine) {
+      syncService.sync();
+    }
   }, []);
 
   const getItemsByDate = useCallback(
@@ -203,32 +219,44 @@ export function useExpenseData() {
     return grouped;
   }, [items]);
 
+  // Sync actions
+  const triggerSync = useCallback(async () => {
+    return await syncService.sync();
+  }, []);
+
+  const restoreFromCloud = useCallback(async () => {
+    return await syncService.restoreFromCloud();
+  }, []);
+
   return {
     // Data
     receipts,
     items,
     settings,
     itemsByDate,
-    incomes,
 
-    // Calculated
+    // Calculated - spending focused
     totalSpent,
     weeklySpent,
-    totalIncome,
-    remaining: weeklyRemaining, // Export as "remaining" for backward compatibility with UI, but it's weekly remaining budget
-    holdings: currentHoldings, // Export as "holdings" (current balance)
+    weeklyBudget,
+    weeklyRemaining,
     spendingPercentage,
     alerts,
+
+    // Sync status
+    syncStatus,
 
     // Actions
     addReceipt,
     addItem,
     addReceiptWithItems,
-    addIncome,
-    deleteIncome,
     updateSettings,
     deleteReceipt,
     deleteItem,
     getItemsByDate,
+
+    // Sync actions
+    triggerSync,
+    restoreFromCloud,
   };
 }

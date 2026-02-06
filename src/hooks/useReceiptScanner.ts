@@ -19,17 +19,26 @@ Return ONLY valid JSON in this exact format:
 
 Be accurate with prices. If you cannot read something clearly, make your best guess. Always return valid JSON.`;
 
+// Get API key from environment variable (more secure than storing in DB)
+const getApiKey = (): string => {
+  return import.meta.env.VITE_OPENAI_API_KEY || "";
+};
+
 export function useReceiptScanner() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Check if API key is configured
+  const isConfigured = Boolean(getApiKey());
+
   const scanReceipt = useCallback(
-    async (
-      imageBase64: string,
-      apiKey: string,
-    ): Promise<ParsedReceipt | null> => {
+    async (imageBase64: string): Promise<ParsedReceipt | null> => {
+      const apiKey = getApiKey();
+
       if (!apiKey) {
-        setError("Please set your OpenAI API key in Settings");
+        setError(
+          "OpenAI API key not configured. Please add VITE_OPENAI_API_KEY to your .env file.",
+        );
         return null;
       }
 
@@ -125,5 +134,6 @@ export function useReceiptScanner() {
     isProcessing,
     error,
     clearError,
+    isConfigured,
   };
 }

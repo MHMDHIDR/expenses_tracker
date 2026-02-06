@@ -13,17 +13,17 @@ import {
 } from "recharts";
 import { useExpenseData } from "@/hooks/useExpenseData";
 import {
-  Wallet,
-  TrendingUp,
   TrendingDown,
   AlertTriangle,
   CheckCircle,
   Info,
   Receipt,
   ShoppingBag,
+  PiggyBank,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { formatCurrency } from "@/lib/format-currency";
+import { RecurrenceAnalysis } from "@/components/RecurrenceAnalysis";
 
 type FilterPeriod = "3d" | "7d" | "2w" | "1m";
 
@@ -82,8 +82,14 @@ const CustomTooltip = ({
 };
 
 export default function Home() {
-  const { weeklySpent, remaining, holdings, alerts, receipts, items } =
-    useExpenseData();
+  const {
+    weeklySpent,
+    weeklyBudget,
+    spendingPercentage,
+    alerts,
+    receipts,
+    items,
+  } = useExpenseData();
   const [selectedFilter, setSelectedFilter] = useState<FilterPeriod>("7d");
 
   // Generate chart data based on selected filter
@@ -171,10 +177,10 @@ export default function Home() {
         <h1 className="text-3xl font-bold bg-linear-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
           Expense Tracker
         </h1>
-        <p className="text-slate-400 mt-1">Keep your finances in check</p>
+        <p className="text-slate-400 mt-1">Track your spending habits</p>
       </motion.header>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Spending Focused */}
       <div className="px-6 grid grid-cols-2 gap-4 mb-6">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
@@ -183,12 +189,29 @@ export default function Home() {
           className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-4 border border-slate-700/50"
         >
           <div className="flex items-center gap-2 text-slate-400 mb-2">
-            <Wallet className="size-4" />
-            <span className="text-xs font-medium">Current Balance</span>
+            <TrendingDown className="size-4" />
+            <span className="text-xs font-medium">Weekly Spent</span>
           </div>
-          <p className="text-2xl font-bold text-white">
-            {formatCurrency({ price: holdings })}
+          <p className="text-2xl font-bold text-rose-400">
+            {formatCurrency({ price: weeklySpent })}
           </p>
+          <div className="mt-2">
+            <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  spendingPercentage >= 100
+                    ? "bg-red-500"
+                    : spendingPercentage >= 80
+                      ? "bg-amber-500"
+                      : "bg-emerald-500"
+                }`}
+                style={{ width: `${Math.min(spendingPercentage, 100)}%` }}
+              />
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {spendingPercentage.toFixed(0)}% of budget
+            </p>
+          </div>
         </motion.div>
 
         <motion.div
@@ -198,12 +221,13 @@ export default function Home() {
           className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-4 border border-slate-700/50"
         >
           <div className="flex items-center gap-2 text-slate-400 mb-2">
-            <TrendingDown className="size-4" />
-            <span className="text-xs font-medium">Weekly Spend</span>
+            <PiggyBank className="size-4" />
+            <span className="text-xs font-medium">Weekly Budget</span>
           </div>
-          <p className="text-2xl font-bold text-rose-400">
-            {formatCurrency({ price: weeklySpent })}
+          <p className="text-2xl font-bold text-cyan-400">
+            {formatCurrency({ price: weeklyBudget })}
           </p>
+          <p className="text-xs text-slate-500 mt-3">Your spending limit</p>
         </motion.div>
 
         <motion.div
@@ -213,14 +237,13 @@ export default function Home() {
           className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-4 border border-slate-700/50"
         >
           <div className="flex items-center gap-2 text-slate-400 mb-2">
-            <TrendingUp className="size-4" />
-            <span className="text-xs font-medium">Weekly Budget Left</span>
+            <Receipt className="size-4" />
+            <span className="text-xs font-medium">Receipts</span>
           </div>
-          <p
-            className={`text-2xl font-bold ${remaining >= 0 ? "text-emerald-400" : "text-red-400"}`}
-          >
-            {formatCurrency({ price: remaining })}
+          <p className="text-2xl font-bold text-violet-400">
+            {receipts.length}
           </p>
+          <p className="text-xs text-slate-500 mt-3">Total scanned</p>
         </motion.div>
 
         <motion.div
@@ -230,10 +253,11 @@ export default function Home() {
           className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-4 border border-slate-700/50"
         >
           <div className="flex items-center gap-2 text-slate-400 mb-2">
-            <Receipt className="size-4" />
-            <span className="text-xs font-medium">Receipts</span>
+            <ShoppingBag className="size-4" />
+            <span className="text-xs font-medium">Items Tracked</span>
           </div>
-          <p className="text-2xl font-bold text-cyan-400">{receipts.length}</p>
+          <p className="text-2xl font-bold text-emerald-400">{items.length}</p>
+          <p className="text-xs text-slate-500 mt-3">Total purchases</p>
         </motion.div>
       </div>
 
@@ -376,6 +400,9 @@ export default function Home() {
           </div>
         )}
       </motion.div>
+
+      {/* Purchase Recurrence Analysis */}
+      <RecurrenceAnalysis items={items} />
 
       {/* Alerts */}
       {alerts.length > 0 && (

@@ -1,0 +1,49 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Receipt {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  date        DateTime
+  totalAmount Float
+  imageUrl    String?
+  merchant    String?
+  processed   Boolean  @default(false)
+  items       Item[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Item {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  receiptId String   @db.ObjectId
+  receipt   Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  name      String
+  quantity  Int      @default(1)
+  price     Float
+  date      DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([receiptId])
+  @@index([name])
+  @@index([date])
+}
+
+model UserSettings {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @unique @default("default_user")
+  budget    Float    @default(500)
+  // Note: OpenAI API key is stored in environment variables (VITE_OPENAI_API_KEY)
+  // for security, not in the database
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

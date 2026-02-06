@@ -1,79 +1,189 @@
-# AI Expense Tracker PWA
+# Expense Tracker PWA
 
-A modern, local-first Progressive Web App (PWA) for tracking personal finances. This application leverages AI for receipt scanning and offers powerful visualizations to keep your budget in check, all while respecting your privacy by storing data locally on your device.
+A Progressive Web App for tracking expenses with receipt scanning, budget alerts, and MongoDB cloud sync with offline support.
 
 ## Features
 
-- 📱 **Mobile-First PWA**: Installable on iOS and Android, works offline, and feels like a native app.
-- 🧾 **AI Receipt Scanning**: Snap a photo of your receipt to automatically extract items, prices, and totals using OpenAI's GPT-4o-mini.
-- 💰 **Budget Management**: Set weekly budgets and hold amounts to track your financial health.
-- 📊 **Visual Analytics**: Interactive charts and graphs to visualize your spending habits.
-- 🔒 **Local-First Privacy**: All data is stored in your browser using IndexedDB (via Dexie.js). No external servers hold your financial data.
-- 🎨 **Premium UI/UX**: Built with Framer Motion for smooth animations and a polished dark-mode aesthetic.
+- 📸 **Receipt Scanning** - AI-powered receipt parsing with OpenAI Vision API
+- 💰 **Budget Tracking** - Weekly budget limits with alerts
+- 📊 **Spending Analysis** - Visual charts for spending patterns
+- 🔄 **Purchase Recurrence** - Track how often you buy items
+- 📱 **PWA Support** - Install on mobile, works offline
+- ☁️ **Cloud Sync** - MongoDB storage with automatic sync when online
 
-## Tech Stack
+## Architecture
 
-- **Framework**: [React](https://react.dev/) + [Vite](https://vitejs.dev/)
-- **Language**: TypeScript
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
-- **Database**: [Dexie.js](https://dexie.org/) (IndexedDB wrapper)
-- **Animations**: [Framer Motion](https://www.framer.com/motion/)
-- **Charts**: [Recharts](https://recharts.org/)
-- **PWA**: Vite PWA Plugin
-- **AI**: OpenAI API
+### Frontend (Vite + React)
 
-## Getting Started
+- **React 19** with TypeScript
+- **Dexie.js** for local IndexedDB storage (offline-first)
+- **Tailwind CSS** for styling
+- **Framer Motion** for animations
+- **Recharts** for data visualization
 
-### Prerequisites
+### Backend (Express + Prisma)
 
-- Node.js installed
-- An OpenAI API Key (for receipt scanning features)
+- **Express.js** REST API server
+- **Prisma 6** ORM for MongoDB
+- **MongoDB Atlas** for cloud storage
 
-### Installation
+### Data Flow
 
-1. **Clone the repository** (if applicable) or navigate to the project directory.
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     PWA Frontend                            │
+│  ┌─────────────┐    ┌──────────────┐    ┌───────────────┐  │
+│  │ useExpense  │───>│  offlineDB   │<──>│  IndexedDB    │  │
+│  │   Data      │    │  (Dexie.js)  │    │  (Local)      │  │
+│  └─────────────┘    └──────────────┘    └───────────────┘  │
+│         │                  │                                │
+│         v                  v                                │
+│  ┌─────────────┐    ┌──────────────┐                       │
+│  │ syncService │<──>│   apiClient  │                       │
+│  └─────────────┘    └──────────────┘                       │
+└─────────────────────────────│───────────────────────────────┘
+                              │ HTTP/REST
+                              v
+┌─────────────────────────────────────────────────────────────┐
+│                     API Server                              │
+│  ┌─────────────────┐    ┌──────────────┐    ┌───────────┐  │
+│  │  Express.js     │───>│  Prisma ORM  │───>│  MongoDB  │  │
+│  │  REST API       │    │              │    │  Atlas    │  │
+│  └─────────────────┘    └──────────────┘    └───────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
 
-2. **Install dependencies**:
+## Quick Start
 
-   ```bash
-   npm install
-   ```
+### 1. Install Dependencies
 
-3. **Start the development server**:
+```bash
+# Install frontend dependencies
+bun install
 
-   ```bash
-   npm run dev
-   ```
+# Install server dependencies
+bun run server:install
+```
 
-4. **Build for production**:
-   ```bash
-   npm run build
-   ```
+### 2. Configure Environment
 
-## Configuration
+Create a `.env` file in the project root:
 
-To use the AI receipt scanning feature, you will need to enter your OpenAI API key in the **Settings** page of the application. The key is stored locally in your browser and is never sent to our servers.
+```env
+# MongoDB connection (for server)
+DATABASE_URL="mongodb+srv://username:password@cluster.mongodb.net/expenses_tracker?retryWrites=true&w=majority"
+
+# OpenAI API Key (required for receipt scanning)
+VITE_OPENAI_API_KEY="sk-your-openai-api-key"
+
+# API Server URL (for frontend to connect to backend)
+VITE_API_URL="http://localhost:3001/api"
+```
+
+> **Security Note**: The OpenAI API key is stored in environment variables for security, not in the database. This prevents accidental exposure and makes it easier to rotate keys.
+
+### 3. Setup Database
+
+```bash
+# Generate Prisma client
+bun run db:generate
+
+# Push schema to MongoDB
+bun run db:push
+```
+
+### 4. Run Development Servers
+
+```bash
+# Run both frontend and backend together
+bun run dev:all
+
+# Or run separately:
+bun run dev          # Frontend on :5173
+bun run server:dev   # Backend on :3001
+```
 
 ## Project Structure
 
 ```
-src/
-├── components/   # Reusable UI components
-├── db/          # Dexie database schema and configuration
-├── hooks/       # Custom React hooks (Expense logic, Scanner)
-├── lib/         # Utilities (OpenAI client, helpers)
-├── pages/       # Application routes/pages
-└── types/       # TypeScript type definitions
+expenses_tracker/
+├── prisma/
+│   └── schema.prisma      # MongoDB schema definition
+├── server/
+│   ├── index.ts           # Express API server
+│   ├── package.json       # Server dependencies
+│   └── tsconfig.json      # Server TypeScript config
+├── src/
+│   ├── components/
+│   │   └── RecurrenceAnalysis.tsx  # Item recurrence chart
+│   ├── hooks/
+│   │   ├── useExpenseData.ts       # Main data hook
+│   │   └── useReceiptScanner.ts    # OpenAI receipt parsing
+│   ├── pages/
+│   │   ├── Home.tsx                # Dashboard
+│   │   ├── ScanPage.tsx            # Receipt scanner
+│   │   ├── HistoryPage.tsx         # Purchase history
+│   │   └── SettingsPage.tsx        # App settings
+│   ├── services/
+│   │   ├── apiClient.ts            # REST API client
+│   │   ├── offlineStorage.ts       # IndexedDB storage
+│   │   └── syncService.ts          # Cloud sync logic
+│   └── types/
+│       └── expenses.ts             # TypeScript interfaces
+├── .env.example                    # Environment template
+├── package.json                    # Frontend dependencies
+└── README.md                       # This file
 ```
 
-## Privacy
+## Scripts
 
-This application follows a strict **Local-First** philosophy.
+| Script                   | Description              |
+| ------------------------ | ------------------------ |
+| `bun run dev`            | Start Vite dev server    |
+| `bun run dev:all`        | Start frontend + backend |
+| `bun run build`          | Build for production     |
+| `bun run server:dev`     | Start API server         |
+| `bun run server:install` | Install server deps      |
+| `bun run db:generate`    | Generate Prisma client   |
+| `bun run db:push`        | Push schema to MongoDB   |
+| `bun run db:studio`      | Open Prisma Studio       |
 
-- **No Account Required**: You don't need to sign up or log in.
-- **Your Data is Yours**: All receipts, transactions, and settings are stored in your browser's IndexedDB.
-- **Clear Data**: You can wipe all your data instantly from the Settings page.
+## Offline Support
 
----
+The app works fully offline using IndexedDB for local storage. When online:
 
-_Keep your finances in check with style._
+1. **Automatic Sync** - Changes sync to MongoDB every 30 seconds
+2. **Real-time Sync** - Immediate sync on data changes (when online)
+3. **Reconnection Sync** - Queued changes sync when back online
+4. **Conflict Resolution** - Local-first strategy for data conflicts
+
+## API Endpoints
+
+| Method | Endpoint            | Description           |
+| ------ | ------------------- | --------------------- |
+| GET    | `/api/receipts`     | Get all receipts      |
+| POST   | `/api/receipts`     | Create receipt        |
+| PATCH  | `/api/receipts/:id` | Update receipt        |
+| DELETE | `/api/receipts/:id` | Delete receipt        |
+| GET    | `/api/items`        | Get all items         |
+| POST   | `/api/items`        | Create item           |
+| POST   | `/api/items/bulk`   | Create multiple items |
+| PATCH  | `/api/items/:id`    | Update item           |
+| DELETE | `/api/items/:id`    | Delete item           |
+| GET    | `/api/settings`     | Get user settings     |
+| PUT    | `/api/settings`     | Update settings       |
+| GET    | `/api/sync/all`     | Fetch all data        |
+| POST   | `/api/sync`         | Bulk sync             |
+| GET    | `/api/health`       | Health check          |
+
+## Tech Stack
+
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS
+- **Backend**: Express.js, Prisma 6, TypeScript
+- **Database**: MongoDB Atlas (cloud), IndexedDB (local)
+- **AI**: OpenAI Vision API for receipt parsing
+- **PWA**: vite-plugin-pwa, Service Workers
+
+## License
+
+MIT

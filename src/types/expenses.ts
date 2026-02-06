@@ -18,19 +18,11 @@ export interface Item {
   date: Date;
 }
 
-export interface Income {
-  id?: number;
-  amount: number;
-  source: string;
-  description?: string;
-  date: Date;
-}
-
 export interface UserSettings {
   id?: string;
   budget: number;
-  holding: number;
-  openaiKey: string;
+  // Note: OpenAI API key is now stored in environment variables (VITE_OPENAI_API_KEY)
+  // for security - not in database
 }
 
 export interface ParsedReceiptItem {
