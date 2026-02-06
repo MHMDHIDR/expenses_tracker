@@ -373,12 +373,17 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 // ============ START SERVER ============
 
-const PORT = process.env.PORT || 3001;
+// Export app for Vercel
+export default app;
 
-app.listen(PORT, () => {
-  console.log(`🚀 API server running on http://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-});
+// Start server only if not running in Vercel (local development)
+if (process.env.NODE_ENV !== "production") {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => {
+    console.log(`🚀 API server running on http://localhost:${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+  });
+}
 
 // Graceful shutdown
 process.on("SIGTERM", async () => {
