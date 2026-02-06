@@ -51,8 +51,22 @@ class SyncService {
       window.addEventListener("online", this.handleOnline);
       window.addEventListener("offline", this.handleOffline);
 
-      // Update pending changes count periodically
+      // Listen for local data changes
+      window.addEventListener("expense-tracker:data-changed", () => {
+        this.updatePendingCount();
+        if (this.status.isOnline) {
+          this.sync();
+        }
+      });
+
+      // Update pending changes count
       this.updatePendingCount();
+
+      // Start sync if already online
+      if (this.status.isOnline) {
+        this.sync();
+        this.startPeriodicSync();
+      }
     }
   }
 
@@ -162,6 +176,12 @@ class SyncService {
       this.status.isSyncing = false;
       await this.updatePendingCount();
       this.emit("sync-complete");
+
+      // Check if more items were added while syncing
+      const remainingItems = await offlineStorage.getPendingSyncItems();
+      if (remainingItems.length > 0) {
+        this.sync();
+      }
 
       return true;
     } catch (error) {

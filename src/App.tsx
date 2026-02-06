@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
+import { useEffect } from "react";
+import { syncService } from "@/services/syncService";
 import BottomNav from "@/components/BottomNav";
 import Home from "@/pages/Home";
 import ScanPage from "@/pages/ScanPage";
@@ -9,6 +11,13 @@ import NotFound from "@/pages/NotFound";
 import OfflineBanner from "@/components/OfflineBanner";
 
 export default function App() {
+  useEffect(() => {
+    // Initialize sync service
+    if (navigator.onLine) {
+      syncService.startPeriodicSync();
+    }
+  }, []);
+
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-slate-950">

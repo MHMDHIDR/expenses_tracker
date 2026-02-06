@@ -1,12 +1,23 @@
 import { useExpenseData } from "@/hooks/useExpenseData";
 import { offlineDB } from "@/services/offlineStorage";
 import { motion } from "framer-motion";
-import { AlertTriangle, PiggyBank, Save, Settings, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  PiggyBank,
+  Save,
+  Settings,
+  Trash2,
+  Cloud,
+  RefreshCw,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useSyncStatus } from "@/hooks/useSyncStatus";
 
 export default function SettingsPage() {
   const { settings, updateSettings, receipts, items } = useExpenseData();
+  const { isOnline, isSyncing, lastSyncAt, pendingChanges, syncNow } =
+    useSyncStatus();
 
   const [budget, setBudget] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -29,6 +40,19 @@ export default function SettingsPage() {
       toast.error("Failed to save settings");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSync = async () => {
+    try {
+      const success = await syncNow();
+      if (success) {
+        toast.success("Synced with cloud successfully");
+      } else {
+        toast.error("Sync failed");
+      }
+    } catch (error) {
+      toast.error("Sync failed");
     }
   };
 
@@ -107,6 +131,66 @@ export default function SettingsPage() {
           )}
           {isSaving ? "Saving..." : "Save Settings"}
         </motion.button>
+
+        {/* Cloud Sync */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.22 }}
+          className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50 mb-6"
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <div
+              className={`p-2 rounded-xl ${isOnline ? "bg-blue-500/20" : "bg-slate-500/20"}`}
+            >
+              <Cloud
+                className={`size-5 ${isOnline ? "text-blue-400" : "text-slate-400"}`}
+              />
+            </div>
+            <h2 className="text-lg font-semibold">Cloud Sync</h2>
+          </div>
+
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm">
+              <p className="text-slate-300">
+                Status:{" "}
+                <span
+                  className={isOnline ? "text-emerald-400" : "text-slate-500"}
+                >
+                  {isOnline ? "Online" : "Offline"}
+                </span>
+              </p>
+              <p className="text-slate-400 mt-1">
+                Last synced:{" "}
+                {lastSyncAt ? lastSyncAt.toLocaleTimeString() : "Never"}
+              </p>
+              {pendingChanges > 0 && (
+                <p className="text-amber-400 mt-1 text-xs">
+                  {pendingChanges} changes pending
+                </p>
+              )}
+            </div>
+
+            <button
+              onClick={handleSync}
+              disabled={isSyncing || !isOnline}
+              className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${
+                isOnline
+                  ? "bg-blue-600 hover:bg-blue-500 text-white"
+                  : "bg-slate-700 text-slate-500 cursor-not-allowed"
+              }`}
+            >
+              <RefreshCw
+                className={`size-4 ${isSyncing ? "animate-spin" : ""}`}
+              />
+              {isSyncing ? "Syncing..." : "Sync Now"}
+            </button>
+          </div>
+
+          <p className="text-slate-400 text-xs">
+            Data is automatically synced when you're online.
+          </p>
+        </motion.div>
 
         {/* Data Management */}
         <motion.div

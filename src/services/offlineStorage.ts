@@ -205,6 +205,11 @@ export const offlineStorage = {
       createdAt: new Date(),
       retryCount: 0,
     });
+
+    // Notify sync service
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("expense-tracker:data-changed"));
+    }
   },
 
   async getPendingSyncItems(): Promise<SyncQueueItem[]> {
