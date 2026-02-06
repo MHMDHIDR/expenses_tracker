@@ -158,7 +158,7 @@ export function RecurrenceAnalysis({ items }: RecurrenceAnalysisProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.35 }}
-      className="mx-6 bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50 mb-6"
+      className="mx-6 bg-slate-800/50 backdrop-blur-xl rounded-2xl p-2 border border-slate-700/50 mb-6"
     >
       {/* Header with Dropdown */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -231,7 +231,7 @@ export function RecurrenceAnalysis({ items }: RecurrenceAnalysisProps) {
               <BarChart
                 data={recurrenceData}
                 layout="vertical"
-                margin={{ top: 0, right: 20, left: 0, bottom: 0 }}
+                margin={{ top: 0, right: 0, left: -45, bottom: -15 }}
               >
                 <defs>
                   {gradientColors.map((color, i) => (

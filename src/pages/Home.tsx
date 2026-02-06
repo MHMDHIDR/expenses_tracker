@@ -266,7 +266,7 @@ export default function Home() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
-        className="mx-6 bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50 mb-6"
+        className="mx-6 bg-slate-800/50 backdrop-blur-xl rounded-2xl p-2 border border-slate-700/50 mb-6"
       >
         {/* Chart Header with Filter Buttons */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
