@@ -48,7 +48,7 @@ app.get(
   "/api/receipts/:id",
   asyncHandler(async (req: Request, res: Response) => {
     const receipt = await prisma.receipt.findUnique({
-      where: { id: req.params.id },
+      where: { id: String(req.params.id) },
       include: { items: true },
     });
 
@@ -88,7 +88,7 @@ app.patch(
     const { date, totalAmount, imageUrl, merchant, processed } = req.body;
 
     const receipt = await prisma.receipt.update({
-      where: { id: req.params.id },
+      where: { id: String(req.params.id) },
       data: {
         ...(date && { date: new Date(date) }),
         ...(totalAmount !== undefined && { totalAmount }),
@@ -107,7 +107,7 @@ app.delete(
   "/api/receipts/:id",
   asyncHandler(async (req: Request, res: Response) => {
     await prisma.receipt.delete({
-      where: { id: req.params.id },
+      where: { id: String(req.params.id) },
     });
 
     res.json({ deleted: true });
@@ -132,7 +132,7 @@ app.get(
   "/api/items/:id",
   asyncHandler(async (req: Request, res: Response) => {
     const item = await prisma.item.findUnique({
-      where: { id: req.params.id },
+      where: { id: String(req.params.id) },
     });
 
     if (!item) {
@@ -216,7 +216,7 @@ app.patch(
     const { name, quantity, price, date } = req.body;
 
     const item = await prisma.item.update({
-      where: { id: req.params.id },
+      where: { id: String(req.params.id) },
       data: {
         ...(name !== undefined && { name }),
         ...(quantity !== undefined && { quantity }),
@@ -234,7 +234,7 @@ app.delete(
   "/api/items/:id",
   asyncHandler(async (req: Request, res: Response) => {
     await prisma.item.delete({
-      where: { id: req.params.id },
+      where: { id: String(req.params.id) },
     });
 
     res.json({ deleted: true });
