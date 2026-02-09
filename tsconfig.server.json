@@ -6,7 +6,9 @@
     "target": "ES2022",
     "outDir": "dist",
     "sourceMap": true,
-    "noImplicitAny": true
+    "noImplicitAny": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
   },
   "include": ["api/**/*", "server/**/*"]
 }
