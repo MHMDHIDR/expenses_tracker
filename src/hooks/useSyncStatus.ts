@@ -26,10 +26,6 @@ export function useSyncStatus() {
     return await syncService.sync();
   };
 
-  const pushAllToCloud = async () => {
-    return await syncService.pushAllToCloud();
-  };
-
   const restoreFromCloud = async () => {
     return await syncService.restoreFromCloud();
   };
@@ -41,7 +37,8 @@ export function useSyncStatus() {
   return {
     ...status,
     syncNow,
-    pushAllToCloud,
+    pushAllToCloud: async () => await syncService.performFullSync(),
+    performFullSync: async () => await syncService.performFullSync(),
     restoreFromCloud,
     resetFailures,
   };

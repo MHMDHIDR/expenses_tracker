@@ -269,4 +269,103 @@ export const offlineStorage = {
     await offlineDB.items.clear();
     await offlineDB.syncQueue.clear();
   },
+
+  // NEW: Sync helpers for full synchronization
+  async getUnsyncedReceipts(): Promise<LocalReceipt[]> {
+    return await offlineDB.receipts
+      .filter((r) => !r.syncMeta?.cloudId)
+      .toArray();
+  },
+
+  async getUnsyncedItems(): Promise<LocalItem[]> {
+    return await offlineDB.items.filter((i) => !i.syncMeta?.cloudId).toArray();
+  },
+
+  async getSyncedReceipts(): Promise<LocalReceipt[]> {
+    return await offlineDB.receipts
+      .filter((r) => !!r.syncMeta?.cloudId)
+      .toArray();
+  },
+
+  async getSyncedItems(): Promise<LocalItem[]> {
+    return await offlineDB.items.filter((i) => !!i.syncMeta?.cloudId).toArray();
+  },
+
+  async bulkUpsertReceipts(
+    receipts: Array<Omit<LocalReceipt, "id"> & { cloudId: string }>,
+  ): Promise<void> {
+    await offlineDB.transaction("rw", offlineDB.receipts, async () => {
+      for (const receipt of receipts) {
+        const existing = await offlineDB.receipts
+          .where("syncMeta.cloudId")
+          .equals(receipt.cloudId)
+          .first();
+
+        const syncMeta = {
+          id: existing?.syncMeta?.id ?? crypto.randomUUID(),
+          lastSyncedAt: new Date(),
+          pendingSync: false,
+          cloudId: receipt.cloudId,
+        };
+
+        if (existing) {
+          await offlineDB.receipts.update(existing.id!, {
+            ...receipt,
+            syncMeta,
+          });
+        } else {
+          // Ensure we don't accidentally save 'id' field if it was passed in the spread
+          const { id, ...receiptData } = receipt as any;
+          await offlineDB.receipts.add({
+            ...receiptData,
+            syncMeta,
+          } as LocalReceipt);
+        }
+      }
+    });
+  },
+
+  async bulkUpsertItems(
+    items: Array<Omit<LocalItem, "id"> & { cloudId: string }>,
+  ): Promise<void> {
+    await offlineDB.transaction("rw", offlineDB.items, async () => {
+      for (const item of items) {
+        const existing = await offlineDB.items
+          .where("syncMeta.cloudId")
+          .equals(item.cloudId)
+          .first();
+
+        const syncMeta = {
+          id: existing?.syncMeta?.id ?? crypto.randomUUID(),
+          lastSyncedAt: new Date(),
+          pendingSync: false,
+          cloudId: item.cloudId,
+        };
+
+        if (existing) {
+          await offlineDB.items.update(existing.id!, {
+            ...item,
+            syncMeta,
+          });
+        } else {
+          // Ensure we don't accidentally save 'id' field if it was passed in the spread
+          const { id, ...itemData } = item as any;
+          await offlineDB.items.add({
+            ...itemData,
+            syncMeta,
+          } as LocalItem);
+        }
+      }
+    });
+  },
+
+  async deleteReceiptsByCloudIds(cloudIds: string[]): Promise<void> {
+    if (cloudIds.length === 0) return;
+    await offlineDB.receipts.where("syncMeta.cloudId").anyOf(cloudIds).delete();
+  },
+
+  async deleteItemsByCloudIds(cloudIds: string[]): Promise<void> {
+    if (cloudIds.length === 0) return;
+    await offlineDB.items.where("syncMeta.cloudId").anyOf(cloudIds).delete();
+  },
 };

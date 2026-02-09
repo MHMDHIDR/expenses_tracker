@@ -22,7 +22,7 @@ export default function SettingsPage() {
     lastSyncAt,
     pendingChanges,
     error,
-    pushAllToCloud,
+    performFullSync,
   } = useSyncStatus();
 
   const [budget, setBudget] = useState("");
@@ -51,11 +51,11 @@ export default function SettingsPage() {
 
   const handleSync = async () => {
     try {
-      const success = await pushAllToCloud();
+      const success = await performFullSync();
       if (success) {
-        toast.success("All data synced to cloud successfully!");
+        toast.success("Sync completed successfully!");
       } else {
-        toast.error("Some items failed to sync. Check console for details.");
+        toast.error("Sync failed. Check console for details.");
       }
     } catch (error) {
       toast.error("Sync failed");

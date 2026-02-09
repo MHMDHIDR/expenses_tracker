@@ -82,8 +82,9 @@ class SyncService {
     // Schedule initial sync after a short delay (not immediate)
     if (this.status.isOnline) {
       setTimeout(() => {
-        this.sync();
-        this.startPeriodicSync();
+        this.performFullSync().then(() => {
+          this.startPeriodicSync();
+        });
       }, 1000);
     }
   }
@@ -132,8 +133,8 @@ class SyncService {
     this.status.isOnline = true;
     this.consecutiveFailures = 0; // Reset failure count when coming back online
     this.emit("status-change");
-    // Trigger sync when coming back online (debounced)
-    this.debouncedSync();
+    // Trigger full sync when coming back online
+    this.performFullSync();
     // Start periodic sync
     this.startPeriodicSync();
   };
@@ -485,119 +486,204 @@ class SyncService {
    * not just items in the sync queue. Useful for initial sync or
    * when the user explicitly wants to push all local data.
    */
-  async pushAllToCloud(): Promise<boolean> {
+  /**
+   * Perform Full Sync (Bi-directional)
+   * 1. Push local unsynced changes to cloud
+   * 2. Pull all data from cloud
+   * 3. Merge and reconcile (server wins on conflict)
+   */
+  async performFullSync(): Promise<boolean> {
     if (!this.status.isOnline) {
       this.status.error = "Cannot sync while offline";
       this.emit("status-change");
       return false;
     }
 
-    // Reset consecutive failures when manually pushing
     this.consecutiveFailures = 0;
-
     this.status.isSyncing = true;
     this.status.error = null;
     this.emit("sync-start");
 
     try {
-      // Get all local data
-      const localReceipts = await offlineDB.receipts.toArray();
-      const localItems = await offlineDB.items.toArray();
-      const localSettings = await offlineDB.settings.get("user_settings");
+      // Step 1: Push Local Changes
+      await this.pushLocalChanges();
 
-      let successCount = 0;
-      let errorCount = 0;
-
-      // Sync receipts that don't have a cloudId (never synced)
-      for (const receipt of localReceipts) {
-        if (!receipt.syncMeta?.cloudId) {
-          try {
-            const { id, syncMeta, ...receiptData } = receipt;
-            const result = await apiClient.createReceipt(receiptData);
-            if (result.success && result.data) {
-              await offlineStorage.markReceiptSynced(
-                id as number,
-                result.data._id,
-              );
-              successCount++;
-            } else {
-              errorCount++;
-            }
-          } catch (e) {
-            console.error("Failed to sync receipt:", e);
-            errorCount++;
-          }
-        }
+      // Step 2: Pull Cloud Data
+      const cloudResult = await apiClient.fetchAll();
+      if (!cloudResult.success || !cloudResult.data) {
+        throw new Error(cloudResult.error || "Failed to fetch cloud data");
       }
 
-      // Sync items that don't have a cloudId (never synced)
-      for (const item of localItems) {
-        if (!item.syncMeta?.cloudId) {
-          try {
-            const { id, syncMeta, ...itemData } = item;
-            const result = await apiClient.createItem(itemData);
-            if (result.success && result.data) {
-              await offlineStorage.markItemSynced(
-                id as number,
-                result.data._id,
-              );
-              successCount++;
-            } else {
-              errorCount++;
-            }
-          } catch (e) {
-            console.error("Failed to sync item:", e);
-            errorCount++;
-          }
-        }
+      // Step 3: Merge & Reconcile
+      const {
+        receipts: cloudReceipts,
+        items: cloudItems,
+        settings: cloudSettings,
+      } = cloudResult.data;
+
+      // 3.1: Upsert Receipts
+      // Map cloud receipts to format suitable for bulkUpsert
+      const receiptsToUpsert = cloudReceipts.map((r) => {
+        const { _id, ...data } = r;
+        return {
+          ...data,
+          cloudId: _id,
+        };
+      });
+      await offlineStorage.bulkUpsertReceipts(receiptsToUpsert);
+
+      // 3.2: Upsert Items
+      const itemsToUpsert = cloudItems.map((i) => {
+        const { _id, ...data } = i;
+        return {
+          ...data,
+          cloudId: _id,
+        };
+      });
+      await offlineStorage.bulkUpsertItems(itemsToUpsert);
+
+      // 3.3: Sync Settings
+      if (cloudSettings) {
+        const { _id, userId, ...settingsData } = cloudSettings;
+        await offlineStorage.updateSettings(settingsData);
+        await offlineStorage.markSettingsSynced(_id);
       }
 
-      // Sync settings
-      if (localSettings && !localSettings.syncMeta?.cloudId) {
-        try {
-          const { id, syncMeta, ...settingsData } = localSettings;
-          const result = await apiClient.updateSettings(settingsData);
-          if (result.success && result.data) {
-            await offlineStorage.markSettingsSynced(result.data._id);
-            successCount++;
-          } else {
-            errorCount++;
-          }
-        } catch (e) {
-          console.error("Failed to sync settings:", e);
-          errorCount++;
-        }
+      // 3.4: Delete Stale Data (Server Deletion Propagation)
+      // Identify local items that have a cloudId but are NOT in the fetched cloud data
+      const localSyncedReceipts = await offlineStorage.getSyncedReceipts();
+      const cloudReceiptIds = new Set(cloudReceipts.map((r) => r._id));
+      const receiptsToDelete = localSyncedReceipts
+        .filter(
+          (r) =>
+            r.syncMeta?.cloudId && !cloudReceiptIds.has(r.syncMeta.cloudId),
+        )
+        .map((r) => r.syncMeta!.cloudId!); // these are cloudIds to delete
+
+      if (receiptsToDelete.length > 0) {
+        // We delete by cloudId to avoid accidentally deleting a new local-only item
+        // But offlineStorage.deleteReceiptsByCloudIds does exactly that.
+        await offlineStorage.deleteReceiptsByCloudIds(receiptsToDelete);
       }
 
-      // Also process any remaining sync queue items
-      const pendingItems = await offlineStorage.getPendingSyncItems();
-      for (const item of pendingItems) {
-        const success = await this.processSyncItem(item);
-        if (success) {
-          await offlineStorage.removeSyncItem(item.id!);
-          successCount++;
-        } else {
-          errorCount++;
-        }
+      const localSyncedItems = await offlineStorage.getSyncedItems();
+      const cloudItemIds = new Set(cloudItems.map((i) => i._id));
+      const itemsToDelete = localSyncedItems
+        .filter(
+          (i) => i.syncMeta?.cloudId && !cloudItemIds.has(i.syncMeta.cloudId),
+        )
+        .map((i) => i.syncMeta!.cloudId!);
+
+      if (itemsToDelete.length > 0) {
+        await offlineStorage.deleteItemsByCloudIds(itemsToDelete);
       }
 
       this.status.lastSyncAt = new Date();
       this.status.isSyncing = false;
       await this.updatePendingCount();
+      this.emit("sync-complete");
 
-      if (errorCount > 0) {
-        this.status.error = `Synced ${successCount} items, ${errorCount} failed`;
+      return true;
+    } catch (error) {
+      console.error("Full sync error:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Full sync failed";
+
+      // Handle connection refused / network errors specifically
+      if (
+        errorMessage.includes("Failed to fetch") ||
+        errorMessage.includes("NetworkError")
+      ) {
+        this.status.error = "Connection failed. Is the backend server running?";
+      } else {
+        this.status.error = errorMessage;
       }
 
-      this.emit("sync-complete");
-      return errorCount === 0;
-    } catch (error) {
-      this.status.error =
-        error instanceof Error ? error.message : "Push to cloud failed";
       this.status.isSyncing = false;
       this.emit("sync-error");
       return false;
     }
+  }
+
+  // Helper to push local changes
+  private async pushLocalChanges(): Promise<void> {
+    // Get unsynced resources
+    const unsyncedReceipts = await offlineStorage.getUnsyncedReceipts();
+    const unsyncedItems = await offlineStorage.getUnsyncedItems();
+    const settings = await offlineStorage.getSettings();
+
+    // Push Receipts
+    for (const receipt of unsyncedReceipts) {
+      try {
+        // If it has no cloudId, create it
+        const { id, syncMeta, ...data } = receipt;
+        const result = await apiClient.createReceipt(data);
+        if (result.success && result.data) {
+          await offlineStorage.markReceiptSynced(id as number, result.data._id);
+        }
+      } catch (e) {
+        console.error("Failed to push receipt", e);
+      }
+    }
+
+    // Push Items
+    // We can use bulk create for items if implemented, or loop.
+    // Current usage in pushAllToCloud loop. We can try bulk.
+    // apiClient.createItems expects Omit<Item, "id">[]
+    if (unsyncedItems.length > 0) {
+      // Chunk them or send all? Let's trying sending all to createItems endpoint used in apiClient
+      // Wait, apiClient.createItems is exposed.
+
+      // However, we need to map back the created IDs to local IDs.
+      // The bulk create API returns the created objects (with _ids).
+      // Assuming they return in order?
+      // The backend implementation:
+      /*
+            const createdItems = await prisma.$transaction(items.map(...))
+            return createdItems
+           */
+      // Promise.all or $transaction order is generally preserved but lets be safer with loop for now to guarantee mapping 1:1 if we are unsure of API contract details.
+      // Or better: use the loop like before to be safe.
+      for (const item of unsyncedItems) {
+        try {
+          const { id, syncMeta, ...data } = item;
+          const result = await apiClient.createItem(data);
+          if (result.success && result.data) {
+            await offlineStorage.markItemSynced(id as number, result.data._id);
+          }
+        } catch (e) {
+          console.error("Failed to push item", e);
+        }
+      }
+    }
+
+    // Push Settings
+    if (settings && !settings.syncMeta?.cloudId) {
+      try {
+        const { id, syncMeta, ...settingsData } = settings;
+        const result = await apiClient.updateSettings(settingsData);
+        if (result.success && result.data) {
+          await offlineStorage.markSettingsSynced(result.data._id);
+        }
+      } catch (e) {
+        console.error("Failed to sync settings:", e);
+      }
+    }
+
+    // Process Sync Queue (deletes vs updates)
+    // This handles things that HAVE a cloudId but need Update/Delete
+    const pendingQueue = await offlineStorage.getPendingSyncItems();
+    for (const item of pendingQueue) {
+      await this.processSyncItem(item);
+      await offlineStorage.removeSyncItem(item.id!);
+    }
+  }
+
+  /**
+   * @deprecated Use performFullSync() instead
+   */
+  async pushAllToCloud(): Promise<boolean> {
+    return this.performFullSync();
   }
 
   // Reset failure counter (useful when user manually triggers sync)
