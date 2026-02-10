@@ -49,7 +49,10 @@ export function useReceiptScanner() {
       try {
         // Initialize Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        // Use gemini-1.5-flash-latest as it is more stable for version resolution
+        const model = genAI.getGenerativeModel({
+          model: "gemini-1.5-flash-latest",
+        });
 
         // Prepare image data (strip prefix if present)
         const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
@@ -97,8 +100,15 @@ export function useReceiptScanner() {
 
         return parsed;
       } catch (err) {
-        const message =
+        let message =
           err instanceof Error ? err.message : "Failed to scan receipt";
+
+        // Improve error message for common 404 model not found error
+        if (message.includes("404") && message.includes("not found")) {
+          message =
+            "Model not found. Please check your API key permissions or try a different region/model.";
+        }
+
         setError(message);
         console.error("Receipt scanning error:", err);
         return null;
