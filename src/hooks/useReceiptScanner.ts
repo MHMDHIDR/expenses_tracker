@@ -49,8 +49,9 @@ export function useReceiptScanner() {
       try {
         // Initialize Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
-        // Use gemini-2.0-flash as it is the current standard model
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({
+          model: "gemini-3-flash-preview",
+        });
 
         // Prepare image data (strip prefix if present)
         const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
