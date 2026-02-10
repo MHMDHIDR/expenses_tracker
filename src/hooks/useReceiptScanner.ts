@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import type { ParsedReceipt } from "@/types/expenses";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const SYSTEM_PROMPT = `You are an expert receipt parser. Analyze the receipt image and extract:
 1. Merchant/Store name (if visible)
@@ -8,7 +9,7 @@ const SYSTEM_PROMPT = `You are an expert receipt parser. Analyze the receipt ima
    - Quantity (number of items, default to 1 if not specified)
    - Price (unit price or total price for that item)
 
-Return ONLY valid JSON in this exact format:
+Return ONLY valid JSON in this exact format, without any markdown formatting or code blocks:
 {
   "merchant": "Store Name or null",
   "items": [
@@ -19,9 +20,9 @@ Return ONLY valid JSON in this exact format:
 
 Be accurate with prices. If you cannot read something clearly, make your best guess. Always return valid JSON.`;
 
-// Get API key from environment variable (more secure than storing in DB)
+// Get API key from environment variable
 const getApiKey = (): string => {
-  return import.meta.env.VITE_OPENAI_API_KEY || "";
+  return import.meta.env.VITE_GEMINI_API_KEY || "";
 };
 
 export function useReceiptScanner() {
@@ -37,7 +38,7 @@ export function useReceiptScanner() {
 
       if (!apiKey) {
         setError(
-          "OpenAI API key not configured. Please add VITE_OPENAI_API_KEY to your .env file.",
+          "Gemini API key not configured. Please add VITE_GEMINI_API_KEY to your .env file.",
         );
         return null;
       }
@@ -46,66 +47,48 @@ export function useReceiptScanner() {
       setError(null);
 
       try {
-        const response = await fetch(
-          "https://api.openai.com/v1/chat/completions",
+        // Initialize Gemini
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        // Prepare image data (strip prefix if present)
+        const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+
+        const result = await model.generateContent([
+          SYSTEM_PROMPT,
           {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
+            inlineData: {
+              data: base64Data,
+              mimeType: "image/jpeg",
             },
-            body: JSON.stringify({
-              model: "gpt-4o",
-              messages: [
-                {
-                  role: "system",
-                  content: SYSTEM_PROMPT,
-                },
-                {
-                  role: "user",
-                  content: [
-                    {
-                      type: "text",
-                      text: "Parse this receipt image and extract all items with their prices and quantities.",
-                    },
-                    {
-                      type: "image_url",
-                      image_url: {
-                        url: imageBase64.startsWith("data:")
-                          ? imageBase64
-                          : `data:image/jpeg;base64,${imageBase64}`,
-                      },
-                    },
-                  ],
-                },
-              ],
-              max_tokens: 1000,
-            }),
           },
-        );
+        ]);
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(
-            errorData.error?.message || "Failed to process receipt",
-          );
-        }
+        const response = await result.response;
+        const text = response.text();
 
-        const data = await response.json();
-        const content = data.choices[0]?.message?.content;
-
-        if (!content) {
+        if (!text) {
           throw new Error("No response from AI");
         }
 
-        // Extract JSON from response (handle markdown code blocks)
-        let jsonStr = content;
-        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+        // Extract JSON from response (handle markdown code blocks if any remain)
+        let jsonStr = text;
+        const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
         if (jsonMatch) {
           jsonStr = jsonMatch[1];
         }
 
-        const parsed: ParsedReceipt = JSON.parse(jsonStr.trim());
+        // Clean up any potential leading/trailing whitespace or non-JSON characters
+        jsonStr = jsonStr.trim();
+
+        // Basic JSON validation before parsing
+        const firstBrace = jsonStr.indexOf("{");
+        const lastBrace = jsonStr.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace !== -1) {
+          jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+        }
+
+        const parsed: ParsedReceipt = JSON.parse(jsonStr);
 
         // Validate the response structure
         if (!parsed.items || !Array.isArray(parsed.items)) {
@@ -117,6 +100,7 @@ export function useReceiptScanner() {
         const message =
           err instanceof Error ? err.message : "Failed to scan receipt";
         setError(message);
+        console.error("Receipt scanning error:", err);
         return null;
       } finally {
         setIsProcessing(false);
