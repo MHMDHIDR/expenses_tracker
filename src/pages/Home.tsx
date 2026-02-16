@@ -24,6 +24,7 @@ import {
 import { Link } from "react-router-dom";
 import { formatCurrency } from "@/lib/format-currency";
 import { RecurrenceAnalysis } from "@/components/RecurrenceAnalysis";
+import { FinancialAdviceCard } from "@/components/FinancialAdviceCard";
 
 type FilterPeriod = "3d" | "7d" | "2w" | "1m";
 
@@ -260,6 +261,8 @@ export default function Home() {
           <p className="text-xs text-slate-500 mt-3">Total purchases</p>
         </motion.div>
       </div>
+
+      <FinancialAdviceCard items={items} />
 
       {/* Spending Analysis Chart */}
       <motion.div
